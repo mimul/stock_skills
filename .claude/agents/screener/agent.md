@@ -48,6 +48,8 @@ agent.md 에는 정의를 중복 기재하지 않는다. examples.yaml 이 유�
 
 ## 한국 시장 주의점
 
+- **Yahoo 스크리너에는 한국 종목의 PER/PBR/EPS 가 없다.** region 이 kr 이면 EquityQuery 에 `trailingpe` / `pricebookratio` / `epsgrowth` 조건을 넣지 않는다(넣으면 결과가 0건이 된다). 시가총액·거래소·배당수익률·ROE 등으로 후보를 뽑은 뒤 `get_stock_info()` 로 PER/PBR 을 받아 **로컬에서** `max_per` / `max_pbr` 를 적용한다
+- 한국 종목의 PER/PBR 은 `get_stock_info()` 가 자동 보강한 값이다. 출력 테이블에 `valuation_source`(pykrx = KRX 전일 기준, yfinance-ttm = 최근 4분기 재무제표 계산)를 각주로 밝힌다. `per` 가 None 이고 `eps` 가 음수면 "적자"로 표기한다
 - 코스닥 소형주는 ROE·매출성장 등 재무 필드가 누락(None)되는 경우가 많다. 조건 미달로 버리지 말고 "데이터 없음"으로 표기한다
 - 우선주(005935.KS 등)는 별도 종목으로 잡힌다. 고배당 결과에 섞이면 보통주 대비 괴리율을 함께 적는다
 - 배당 기준일이 연말에 집중되므로 연말 고배당 스크리닝에는 배당락 주석을 붙인다

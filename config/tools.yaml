@@ -11,8 +11,11 @@ tools:
         description: "조건에 맞는 종목을 망라적으로 스크리닝（region: kr/us）"
         when: "재투자·교체·후보 선정 시（필수）. AI 의 지식 베이스에서 수동 선정해서는 안 된다"
       get_stock_info:
-        description: "개별 종목 지표 취득（PER/PBR/ROE/배당수익률/Beta 등）"
+        description: "개별 종목 지표 취득（PER/PBR/ROE/배당수익률/Beta 등）. 한국 종목은 PER/PBR/EPS/BPS 를 kr_valuation 으로 자동 보강하고 valuation_source 에 출처(pykrx / yfinance-ttm)를 표기"
         when: "후보 상세 확인 시, 헬스체크 시"
+      get_kr_valuation:
+        description: "한국 종목 밸류에이션 단독 조회. 공통 키는 per/pbr/eps/bps/source/as_of 만 보장(그 외 키는 공급자별 상이). Yahoo 는 한국 종목 PER/PBR 을 주지 않으므로 공급자(pykrx → yfinance-ttm)로 계산. 우선주·ETF 는 yfinance-ttm 이 None 을 돌려준다"
+        when: "스크리닝 후보의 PER/PBR 로컬 필터 시, 밸류에이션 출처·기준일을 확인하고 싶을 때"
       get_price_history:
         description: "가격 이력 취득（RSI·SMA 등 테크니컬 계산용）"
         when: "테크니컬 확인 시, 스트레스 테스트 시"

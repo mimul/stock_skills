@@ -367,6 +367,7 @@ tool_responsibilities:
   - 이상치 가드 (배당수익률 >15%, PBR <0.1 등 정제)
   - 지역별 임계값 조정 (소형주 시가총액 기준: 한국 5천억 원 / 미국 $1B 등)
   - EquityQuery 빌드·API 호출 (exchange 는 코스피 KSC / 코스닥 KOE / 미국 NMS·NYQ·ASE·NGM·NCM·PCX)
+  - 한국(kr)은 EquityQuery 에 PER/PBR 조건을 넣지 않고(Yahoo 미제공) 후보 취득 후 get_stock_info() 값으로 로컬 필터. max_per/max_pbr 파라미터는 이 로컬 필터에 쓴다
 
 # ---------------------------------------------------------------------------
 # 3축 품질 스코어 활용 Few-shot (KIK-710)

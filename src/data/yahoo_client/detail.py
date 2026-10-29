@@ -19,6 +19,7 @@ from src.data.yahoo_client._normalize import (
     _safe_get,
     _sanitize_anomalies,
 )
+from src.data.ticker_utils import is_korean_stock
 
 
 def _try_get_field(df: Any, field_names: list[str]) -> Optional[float]:
@@ -169,6 +170,11 @@ def get_stock_info(symbol: str) -> Optional[dict]:
             "quoteType": _safe_get(info, "quoteType"),
         }
 
+        # 한국 종목은 Yahoo 가 PER/PBR/EPS/BPS 를 주지 않으므로 kr_valuation 으로 보강한다
+        if is_korean_stock(symbol):
+            from src.data import kr_valuation  # 지연 import (순환 방지)
+
+            result = kr_valuation.enrich_stock_info(result, ticker=ticker)
         _sanitize_anomalies(result)
         _write_cache(symbol, result)
         return result

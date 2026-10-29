@@ -11,6 +11,7 @@ from src.data.ticker_utils import (
     infer_currency,
     infer_region_code,
     is_korean_stock,
+    is_preferred_kr,
     lot_cost,
     round_to_lot_size,
     validate_lot_size,
@@ -256,3 +257,18 @@ class TestLotSizeGreaterThanOne:
     def test_other_suffix_unaffected(self):
         assert get_lot_size("247540.KQ") == 1
         validate_lot_size(7, "247540.KQ")
+
+
+class TestIsPreferredKr:
+    def test_common_stock(self):
+        assert is_preferred_kr("005930.KS") is False
+        assert is_preferred_kr("247540.KQ") is False
+
+    def test_preferred_stock(self):
+        assert is_preferred_kr("005935.KS") is True   # 삼성전자우
+        assert is_preferred_kr("005387.KS") is True   # 현대차2우B
+        assert is_preferred_kr("003545.KS") is True   # 대신증권우
+
+    def test_non_korean(self):
+        assert is_preferred_kr("AAPL") is False
+        assert is_preferred_kr("KRW.CASH") is False

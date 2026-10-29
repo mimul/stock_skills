@@ -47,7 +47,7 @@
 - RSI(14), SMA50, SMA200 을 직접 계산한다
 
 **평가 항목**:
-- 밸류에이션 (PER/PBR/배당수익률)
+- 밸류에이션 (PER/PBR/배당수익률). 한국 종목의 PER/PBR 은 `get_stock_info()` 가 보강한 값이므로 `valuation_source` 와 `valuation_as_of` 를 함께 표기한다(yfinance-ttm 은 최근 분기 말 기준, pykrx 는 KRX 전일 기준). `per` 가 None 이고 `eps` < 0 이면 적자로 본다
 - 저평가도 스코어 (0~100점)
 - 주주환원율 (배당 + 자사주 매입)
 - 밸류트랩 판정 (저PER + 이익 감소 → 경고)

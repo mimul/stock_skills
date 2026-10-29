@@ -132,6 +132,12 @@ def _block_external_io(request, monkeypatch):
     except ImportError:
         pass
 
+    # KRX(pykrx): 개발자 셸의 자격 증명이 테스트로 새지 않도록 제거 + 세션 상태 초기화
+    monkeypatch.delenv("KRX_ID", raising=False)
+    monkeypatch.delenv("KRX_PW", raising=False)
+    from src.data.kr_valuation import _pykrx_provider as _pk
+    _pk.reset_state()
+
     # TEI: no HTTP calls
     from src.data import embedding_client as _ec
     monkeypatch.setattr(_ec, "is_available", lambda: False)
