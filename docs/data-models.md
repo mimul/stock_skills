@@ -173,6 +173,25 @@ ETF 인 경우에만 유의미한 값을 가진다. 개별주에서는 `None` �
 
 ---
 
+## 매크로 지표 항목（`get_macro_indicators()` 반환 list 의 원소）
+
+| 필드 | 타입 | 설명 |
+|:---|:---|:---|
+| name | str | KOSPI / KOSDAQ / S&P500 / 나스닥선물 / VIX / 미국10년물 / USD/KRW / WTI / 금 |
+| symbol | str | 실제 조회한 yfinance 심볼. 나스닥선물은 항상 `NQ=F` |
+| price | float \| None | 최신 종가(일봉 기준. 진행 중 세션이면 현재값) |
+| daily_change | float \| None | 전일 대비. 비율(0.01 = 1%) 또는 포인트 차이. 선물은 직전 정산가 대비（CME 세션 경계 ET 18:00） |
+| weekly_change | float \| None | 5일 창 최초 값 대비 |
+| is_point_diff | bool | VIX·미국10년물만 True（포인트 차이） |
+| basis | "futures" | **나스닥선물 항목에만.** 지수가 아니라 선물임을 표시 |
+| session | "regular" \| "night" | **나스닥선물 항목에만.** 미국 본장(평일 09:30 ≤ t < 16:00 ET) / 그 외·주말(야간 세션) |
+| session_start | str | **나스닥선물 항목에만.** 세션 시작 시각(ET, ISO). regular 는 당일 09:30, night 는 직전 18:00 |
+| session_change | float \| None | **나스닥선물 항목에만.** 세션 시작 봉의 시가 대비 마지막 5분봉 종가 변동률. 창에 봉이 없으면(주말·휴장) None |
+
+세션 판정: `src/data/yahoo_client/us_session.py` 의 `is_us_regular_session()` 이 True 면 `regular`, 아니면 `night`. 호출 시각은 `get_macro_indicators(now=...)` 로 고정할 수 있다（기본은 현재 시각. naive datetime 은 시스템 로컬 시각으로 해석）.
+
+주의: 한국 장중(미국 마감 후)에는 `session_change` 가 야간 세션 변동, 미국 본장 중에는 본장 세션 변동이다. 두 값의 의미가 다르므로 인용 시 세션을 명기한다. 조기 마감일(13:00 ET)은 본장으로 판정되는 알려진 한계가 있다.
+
 ## portfolio.csv（12 컬럼）
 
 `src/data/portfolio_io.py` 가 읽고 쓰는 보유 종목 데이터.

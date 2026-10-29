@@ -157,12 +157,13 @@ examples:
 
   - intent: "시황 체크"
     steps:
-      - tool: yahoo_finance.get_stock_info
-        params: { symbols: ["^KS11", "^KQ11", "^GSPC", "^IXIC", "^VIX", "KRW=X", "^TNX"] }
+      - tool: yahoo_finance.get_macro_indicators
+        params: {}
+        note: "나스닥은 선물 NQ=F. 본장이면 본장 세션, 아니면 야간 세션의 변동이 session/session_change 로 들어옴"
       - tool: yahoo_finance.get_price_history
         params: { symbols: ["^KS11", "^GSPC", "^VIX", "KRW=X"], period: "1mo" }
-      - output: "주요 지표의 현재값·전일 대비·1개월 추이를 제시. 수치만"
-    reasoning: "정량 데이터만. 시장 온도감 판단은 하지 않는다"
+      - output: "주요 지표의 현재값·전일 대비·1개월 추이를 제시. 수치만. 나스닥 선물은 야간/본장 세션 여부를 병기"
+    reasoning: "정량 데이터만. 시장 온도감 판단은 하지 않는다. 한국 장중에는 미국 지수가 전일 종가라 선물이 더 신선하다"
 
   # === 시황 + PF 상관 ===
   - intent: "지금 시황에서 PF에 미치는 영향은?"

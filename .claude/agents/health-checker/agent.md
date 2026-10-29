@@ -96,7 +96,7 @@ portfolio.csv + cash_balance.json으로 비율을 계산:
 ### 4. 시황 정량
 
 다음 심볼에서 데이터를 취득한다:
-- ^KS11 (KOSPI), ^KQ11 (KOSDAQ), ^GSPC (S&P500), ^IXIC (NASDAQ)
+- ^KS11 (KOSPI), ^KQ11 (KOSDAQ), ^GSPC (S&P500), 나스닥선물 NQ=F — `get_macro_indicators()` 가 본장이면 본장 세션, 아니면 야간 세션의 변동(`session` / `session_change`)을 돌려준다. 어느 세션인지 표기
 - ^VIX (공포지수)
 - KRW=X (USD/KRW 환율)
 - ^TNX (미국 10년물 국채 수익률)

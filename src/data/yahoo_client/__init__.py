@@ -57,8 +57,17 @@ from src.data.yahoo_client._memory_cache import clear_memory_cache  # noqa: F401
 # -- Macro indicators --
 from src.data.yahoo_client.macro import (  # noqa: F401
     MACRO_TICKERS,
+    NASDAQ_NAME,
     _POINT_DIFF_TICKERS,
     get_macro_indicators,
+)
+
+# -- US session / NASDAQ futures session --
+from src.data.yahoo_client.us_session import (
+    NASDAQ_FUTURES,
+    is_us_regular_session,
+    nasdaq_session,
+    session_window_start,
 )
 
 # -- Sector relative strength (KIK-702) --
@@ -73,6 +82,8 @@ __all__ = [
     "CACHE_DIR",
     "CACHE_TTL_HOURS",
     "MACRO_TICKERS",
+    "NASDAQ_NAME",
+    "NASDAQ_FUTURES",
     # Public functions
     "get_stock_info",
     "get_multiple_stocks",
@@ -81,6 +92,9 @@ __all__ = [
     "get_price_history",
     "get_stock_news",
     "get_macro_indicators",
+    "is_us_regular_session",
+    "nasdaq_session",
+    "session_window_start",
     "clear_memory_cache",
     # Sector RS (KIK-702)
     "SECTOR_ETFS",

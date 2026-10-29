@@ -461,6 +461,14 @@ def _make_mock_history(closes):
 class TestGetMacroIndicators:
     """Tests for get_macro_indicators()."""
 
+    @pytest.fixture(autouse=True)
+    def _freeze_us_clock(self, monkeypatch):
+        """실행 시각에 따라 나스닥 분기(지수/선물)가 갈리지 않도록 마감 후(20:00 ET)로 고정."""
+        import src.data.yahoo_client.us_session as us_session
+
+        frozen = datetime(2026, 10, 28, 20, 0, tzinfo=us_session.US_EASTERN)
+        monkeypatch.setattr(us_session, "_now_eastern", lambda: frozen)
+
     def test_returns_list(self, monkeypatch):
         """All 8 tickers return data → 8 entries."""
         monkeypatch.setattr(time, "sleep", lambda _: None)
