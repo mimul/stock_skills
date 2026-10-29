@@ -154,44 +154,18 @@ bash scripts/setup_worktree.sh KIK-NNN feature-name
 | e2e_005 | Risk Assessor | 리스크 판정해 줘 | VIX/금리/WTI, RSI 계산 |
 | e2e_006 | HC + Strategist | PF 개선하고 싶어 | lesson, thesis, what-if |
 
-## v1 에서 이전
+### 데이터 디렉토리 설명
 
-v1（[stock_skills](https://github.com/okikusan-public/stock_skills)）에서 이전할 수 있다.
-
-### 데이터 호환성
-
-v1 에서 축적한 아래 데이터는 그대로 v2 에서 사용할 수 있다:
-
-| 데이터 | v1 위치 | v2 위치 | 호환성 |
-|:---|:---|:---|:---|
-| 투자 메모·lesson | `data/notes/*.json` | `data/notes/*.json` | 완전 호환 |
-| 스크리닝 이력 | `data/history/screen/*.json` | `data/history/screen/*.json` | 완전 호환 |
-| 매매 기록 | `data/history/trade/*.json` | `data/history/trade/*.json` | 완전 호환 |
-| 리포트 이력 | `data/history/report/*.json` | `data/history/report/*.json` | 완전 호환 |
-| 리서치 이력 | `data/history/research/*.json` | `data/history/research/*.json` | 완전 호환 |
-| 헬스체크 이력 | `data/history/health/*.json` | `data/history/health/*.json` | 완전 호환 |
-| 포트폴리오 | `data/portfolio.csv` | `data/portfolio.csv` | 완전 호환 |
-| 워치리스트 | `data/watchlists/*.json` | `data/watchlists/*.json` | 완전 호환 |
-| Neo4j（GraphRAG） | 그대로 접속 | 그대로 접속 | 완전 호환 |
-
-### 이전 절차
-
-```bash
-# 1. v2 클론
-git clone https://github.com/okikusan-public/stock_skills_2.git
-cd stock_skills_2
-
-# 2. v1 의 data/ 디렉터리 복사
-cp -r /path/to/stock_skills/data/ ./data/
-
-# 3. 의존성 설치
-pip install -r requirements.txt
-
-# 4. （선택）GraphRAG 와 동기화
-# v2 에서 「sync 해 줘」라고 말하면 data/ → Neo4j 동기화가 실행된다
-```
-
-v1 의 `scripts/`, `src/output/`, 구 `SKILL.md` 군은 v2 에서 필요 없다. `data/` 만 복사하면 이전이 완료된다.
+| 데이터 | 위치 |
+|:---|:---|
+| 투자 메모·lesson | `data/notes/*.json` |
+| 스크리닝 이력 | `data/history/screen/*.json` |
+| 매매 기록 | `data/history/trade/*.json` |
+| 리포트 이력 | `data/history/report/*.json` |
+| 리서치 이력 | `data/history/research/*.json` |
+| 헬스체크 이력 | `data/history/health/*.json` |
+| 포트폴리오 | `data/portfolio.csv` |
+| 워치리스트 | `data/watchlists/*.json` |
 
 ## 면책 조항
 
