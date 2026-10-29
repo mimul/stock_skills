@@ -43,6 +43,15 @@ force_rules:
     - "위 중 하나라도 해당 → 스코어와 무관하게 강제 risk-off"
   note: "강제 risk-off 중의 역추세 매수는 VIX가 고점에서 20% 이상 하락한 뒤에 검토"
 
+# 나스닥 선물 하락 오버레이 (스코어 외. 강제 룰 다음, 지정학 전에 적용. 하방만 보는 비대칭 룰)
+nasdaq_overlay_rules:
+  source: "get_macro_indicators() 의 '나스닥선물' 항목(NQ=F). 본장이 아니면 야간 세션(session=night, 직전 18:00 ET 이후), 본장이면 본장 세션(session=regular, 09:30 ET 이후)의 session_change. None 이면 daily_change 로 대체"
+  severe: "session_change <= -3.0% → 강제 룰과 동급. 판정과 무관하게 당일 신규 매수 보류 권고"
+  downgrade: "session_change <= -1.5% → 판정 1단계 하향 (risk-on→neutral, neutral→risk-off 경계). 이미 risk-off 면 유지"
+  no_change: "session_change > -1.5% → 수정 없음. 상승은 판정을 올리지 않는다(비대칭). 단 내일 장 시나리오에는 추이로 반영"
+  missing: "price·session_change 모두 None → 수정 없음. '나스닥 선물 미취득' 표기, 추정 금지"
+  note: "출력에 야간 세션(한국 장 선행)/본장 세션 여부와 세션 시작 시각을 반드시 명기"
+
 contrarian_rules:
   overbought: "F&G > 80 AND VIX < 15 → 성장주 익절 검토"
   oversold: "F&G < 25 AND VIX > 30 → 눌림목 매수 호기"
@@ -183,6 +192,16 @@ examples:
     pf_target: {income: 60%, growth: 5%, hedge: 10%, cash: 25%}
     reasoning: "과대평가의 멜트다운. ISM 악화로 실물 경제도 냉각되고, 고밸류에이션 종목부터 붕괴. PF의 AI·반도체 테마 집중(30% 초과)이 직격당한다"
     note: "커버드콜 ETF(JEPI, 458730.KS 등)도 성장주와 같은 방향으로 하락한다. 인컴이 아닌 성장 취급"
+
+  # === 나스닥 야간 선물 급락 (한국 장 개장 전) ===
+  - intent: "나스닥 선물이 밤새 빠졌는데 오늘 한국 장 어때?"
+    input: {vix: 17, tnx: 4.2, ism: 51, fg: 55, wti: 80, yc: 0.6, nasdaq_session: night, nasdaq_session_change: -2.1}
+    scores: {vix: +1, tnx: +1, ism: +1, fg: 0, wti: +1, yc: +1}
+    total: +5
+    verdict: "neutral (스코어는 risk-on이나 나스닥 선물 야간 세션 -2.1% → 1단계 하향)"
+    action: "당일 신규 매수는 개장 후 갭 소화를 확인한 뒤로 미룬다. 반도체·IT 비중이 큰 KOSPI 는 갭다운 가능성. 분할 매수 1회차만 허용"
+    reasoning: "한국 장중은 미국 마감 후라 야간 세션 선물이 기준이며, 18:00 ET 세션 시작 대비 -2.1% 는 한국 장 갭다운의 선행 신호. 스코어가 좋아도 직전 하락을 무시하면 당일 고점 매수가 된다"
+    note: "-3.0% 이하였다면 강제 룰과 같이 당일 신규 매수 보류. 본장 중 판정이라면 본장 세션(09:30 ET 이후) 변동을 쓴다. 출력에 세션과 세션 시작 시각을 명기"
 
   # === 정책 전환 (1994년 FRB 전격 금리인상형) ===
   - intent: "갑자기 금리 인상됐어"

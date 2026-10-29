@@ -20,7 +20,8 @@
 - 한국 종목코드는 6자리 숫자 + 접미사（예: `005930.KS`, `247540.KQ`）. 심볼 정규식은 `\d{6}\.K[SQ]` 를 통째로 매칭한다（`\d{4}` 패턴은 앞자리를 잘라내므로 금지）
 - 매매 단위는 한국·미국 모두 1주. `assert_lot_size` / `get_lot_size` 는 API 호환을 위해 남기되 항상 1주 단위로 동작한다
 - 현금 심볼: `KRW.CASH`, `USD.CASH`. 현금 잔고 키: `total_krw`, `krw_equivalent`, `rate_krw_per_usd`, `cash_krw`
-- 매크로 지표（`MACRO_TICKERS`）: KOSPI `^KS11`, KOSDAQ `^KQ11`, S&P500 `^GSPC`, VIX `^VIX`, 미국10년물 `^TNX`, USD/KRW `KRW=X`, WTI `CL=F`, 금 `GC=F`
+- 매크로 지표（`MACRO_TICKERS`）: KOSPI `^KS11`, KOSDAQ `^KQ11`, S&P500 `^GSPC`, 나스닥선물 `NQ=F`, VIX `^VIX`, 미국10년물 `^TNX`, USD/KRW `KRW=X`, WTI `CL=F`, 금 `GC=F`
+- 나스닥은 본장·야간을 가리지 않고 선물 `NQ=F` 를 쓴다. 미국 본장(평일 09:30~16:00 America/New_York)이면 본장 세션(09:30 ET 이후), 아니면 야간 세션(직전 18:00 ET 이후)의 변동을 `session` / `session_start` / `session_change` 키로 돌려준다. 세션 판정은 `src/data/yahoo_client/us_session.py`, 조회는 `macro.get_macro_indicators()` 가 담당한다. 한국 장중은 전부 야간 세션이며, 야간 선물 변동은 한국 장의 선행 신호다
 - 섹터 RS 벤치마크는 `069500.KS`（KODEX 200）, 섹터 ETF 는 한국 상장 ETF（반도체·은행·자동차·증권·건설·철강·에너지화학·헬스케어·보험·운송·IT）
 
 ## 코딩 규약

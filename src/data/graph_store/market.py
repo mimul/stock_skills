@@ -74,7 +74,8 @@ def merge_market_context_full(
                     "MERGE (ind:Indicator {id: $id}) "
                     "SET ind.date = $date, ind.name = $name, "
                     "ind.symbol = $symbol, ind.price = $price, "
-                    "ind.daily_change = $dchange, ind.weekly_change = $wchange "
+                    "ind.daily_change = $dchange, ind.weekly_change = $wchange, "
+                    "ind.basis = $basis "
                     "WITH ind "
                     "MATCH (m:MarketContext {id: $mid}) "
                     "MERGE (m)-[:INCLUDES]->(ind)",
@@ -84,6 +85,7 @@ def merge_market_context_full(
                     price=float(idx.get("price", 0) or 0),
                     dchange=float(idx.get("daily_change", 0) or 0),
                     wchange=float(idx.get("weekly_change", 0) or 0),
+                    basis=str(idx.get("basis", "") or "")[:20],
                     mid=context_id,
                 )
 
