@@ -1,7 +1,4 @@
-# stock-skills v2
-
-> **Version 2** — [stock_skills v1](https://github.com/okikusan-public/stock_skills) 을 바탕으로 Agentic AI Pattern 으로 전면 리뉴얼.
-> v1 에서는 스크립트에 규칙·판단 로직이 박혀 있었지만, v2 에서는 스크립트를 전부 없애고 AI 가 자율적으로 툴 선택·파라미터 결정·실행·리뷰하는 구성으로 전환했다.
+# stock-skills
 
 투자 어시스턴트 시스템. Agentic AI Pattern 으로 설계. 자연어로 말을 걸기만 하면 종목 탐색·분석·포트폴리오 관리·리스크 평가가 자동으로 실행된다. 기준 시장은 한국(KOSPI/KOSDAQ), 보조 시장은 미국이며 기준 통화는 KRW 다.
 
