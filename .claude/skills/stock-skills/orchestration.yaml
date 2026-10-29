@@ -1,0 +1,228 @@
+# Stock Skills Orchestration — 자율 수정 루프 정의
+# 에이전트 실행 후의 자동 리트라이·에스컬레이션·사용자 확인 규칙.
+# 분석·리뷰·수정은 전부 자율적으로 완결한다. 사용자에게 묻는 것은 최종 판단뿐.
+
+retry_rules:
+  - condition: "스크리닝 결과가 0건"
+    action: "조건을 완화해 Screener 재기동 (preset → alpha, top → 20 등). 코스닥 소형주는 재무 데이터 누락으로 걸러질 수 있으니 필터 완화 우선"
+    max_retry: 2
+
+  - condition: "Analyst 분석에 필요한 데이터를 얻지 못함"
+    action: "다른 툴로 대체 취득을 시도 (yahoo_finance → WebSearch 등)"
+    max_retry: 1
+
+  # Reviewer FAIL 의 리트라이는 retry_on_fail 섹션에서 제어 (아래 참조)
+
+  - condition: "Strategist 추천에 모순이 있음"
+    action: "Health Checker 로 사실을 재확인한 뒤 Strategist 재기동"
+    max_retry: 1
+
+  - condition: "Grok API 오류 (rate_limited / timeout)"
+    action: "WebSearch 툴로 대체 검색"
+    max_retry: 1
+
+  - condition: "GraphRAG 미접속"
+    action: "컨텍스트 없이 계속 진행 (graceful degradation)"
+    max_retry: 0  # 리트라이 불필요, 그대로 진행
+
+# ---------------------------------------------------------------------------
+# Reviewer 기동 방침 (KIK-659 / KIK-729 에서 재설계)
+# 3분류: 자동 / 애드혹 / 스킵
+# ---------------------------------------------------------------------------
+auto_review:
+  # 강제 실행만 (되돌릴 수 없거나 고위험)
+  trigger:
+    - context: pre_trade_confirmation     # buy/sell --yes 직전
+    - context: conviction_violation       # 매도 제안에 conviction 종목이 포함됨
+    - context: routine_weekly_strategist  # 주간 routine 의 strategist 출력
+    - context: lesson_citation_zero       # KIK-738: lesson 인용 0건으로 제안 출력 시
+  action: append_reviewer
+  skip_condition: reviewer_already_executed  # 이중 실행 방지
+
+adhoc_review:
+  # 출력 후 [y/skip] 프롬프트를 내고, 다음 턴에서 사용자가 y → Reviewer 기동
+  trigger:
+    - agent_includes: strategist          # 단발 strategist
+    - agent_includes: screener            # 단발 screener (투자 판단의 입구)
+    - routing_flag: "review: true"
+    - output_contains: [매도, 매수, 교체, 리밸런싱, 팔아야, 사야, 갈아타기, 스왑]
+  action: append_review_prompt
+  prompt: "🔍 Reviewer 로 체크할까요? [y/skip]"
+  user_approval_keywords: [y, yes, "리뷰해줘", "체크해줘", "review"]
+  skip_when:
+    - context: auto_review_already_triggered
+    - context: reviewer_already_executed
+
+skip_review:
+  # 완전 스킵 (사실 제시만·연쇄 없는 단독)
+  trigger:
+    - agent_only: health-checker
+    - agent_only: researcher
+    - agent_only: analyst
+    - agent_only: risk-assessor
+
+# ---------------------------------------------------------------------------
+# Reviewer FAIL 시 리트라이 방침 (KIK-671)
+# FAIL 은 "무엇을 고칠지" 판단에 사용자의 의도가 필요하다. 자율 리트라이하지 않는다.
+# ---------------------------------------------------------------------------
+retry_on_fail:
+  max_retries: 2
+  before_retry: ask_user  # FAIL 이유와 수정 방침을 사용자에게 제시하고 승인을 받는다
+  on_pass_or_warn: auto   # PASS/WARN 은 사용자 확인 없이 그대로 출력
+
+# ---------------------------------------------------------------------------
+# 병렬 실행 규칙 (KIK-672/673)
+# 서브에이전트에게 병렬을 맡겨도 순차 실행된다.
+# 오케스트레이터 자신이 복수 Agent 를 동시 발행해 강제로 병렬화한다.
+# ---------------------------------------------------------------------------
+parallel_execution:
+  # 오케스트레이터 주도 병렬화
+  screener_split: true   # 테마×지역별로 독립 Screener 를 동시 발행
+  reviewer_split: true   # 3 리뷰어를 독립 서브에이전트로 동시 발행
+
+  # 에이전트 간 병렬화 (routing.yaml 에서 판단)
+  # 연쇄: A 의 출력이 B 의 입력 → 순차
+  # 병렬: 독립된 관점 → 동시 기동
+
+# ---------------------------------------------------------------------------
+# History Check (KIK-740)
+# 투자 판단 시 4LLM 병렬로 과거의 역사적 유사 사례를 자동 체크한다.
+# routing.yaml 의 history_check 플래그 + 투자 판단 키워드 감지의 이중 트리거.
+# 상세 사양은 SKILL.md 의 "History Check" 섹션 참조.
+# ---------------------------------------------------------------------------
+history_check:
+  run_after: agent_execution         # agent 실행 완료 후 병렬 기동
+  run_before: auto_review            # thesis_check 와 마찬가지로 auto_review 보다 앞
+  trigger:
+    - routing_flag: "history_check: true"
+    - keyword_detect:
+        - 매도
+        - 손절
+        - 익절
+        - 처분
+        - 철수
+        - 매수
+        - 추가매수
+        - 교체
+        - 리밸런싱
+        - 개선
+        - 조정
+        - 역사
+        - 과거 사례
+        - 패턴
+  llm_layout:
+    # API 키 감지는 오케스트레이터 층에서 수행 (os.environ 참조)
+    # 미설정 LLM 은 스킵 (graceful degradation)
+    - llm: claude
+      role: portfolio_aligner
+      required: true                 # Claude (자신) 는 항상 동작
+    - llm: gpt
+      role: devils_advocate
+      env_key: OPENAI_API_KEY
+      params: { model: gpt-5.5, reasoning: high }
+    - llm: gemini
+      role: lesson_auditor
+      env_key: GEMINI_API_KEY
+      params: { model: gemini-3-flash-preview, web_search: true }
+    - llm: grok
+      role: sentiment_analyst
+      env_key: XAI_API_KEY
+  output_format: |
+    ## 📚 역사적 유사 사례
+    ### 전체 LLM 일치점
+    ### 의견이 갈린 점 (불일치 하이라이트)
+    ### 통합 판단 (반증 포인트 필수)
+  required_rules:
+    - "성공 사례 ≥1건 + 실패 사례 ≥2건 의 양론 병기 필수"
+    - "반증 포인트 제시 필수 (맹신 회피)"
+    - "데이터 부족 시 '해당 사례 없음' 을 명기하고 추측을 피한다"
+  skip_conditions:
+    - context: history_check_already_executed   # 동일 세션 이중 실행 방지
+    - context: routine_mode                     # routine-* 에서는 스킵
+    - context: morning_summary                  # 아침 요약에서는 스킵
+    - context: pure_info_query                  # 단순 정보 조회 (VIX/PER 등) 에서는 스킵
+  cost_guardrail:
+    max_invocations_per_session: 5              # 동일 세션 5회 상한
+    max_llm_calls_per_invocation: 4             # 1회 호출당 최대 LLM 수
+
+# ---------------------------------------------------------------------------
+# Thesis Check (KIK-715)
+# HC/Strategist 완료 후, 대상 종목의 thesis 참조를 기계적으로 검증한다.
+# few-shot 만으로는 LLM 이 생략할 가능성이 있으므로 orchestration 에서 강제한다.
+# ---------------------------------------------------------------------------
+thesis_check:
+  run_before: auto_review  # thesis_check → auto_review 순으로 실행
+  trigger:
+    - agent_includes: health-checker
+    - agent_includes: strategist
+  action: |
+    에이전트 완료 후, PF 종목의 thesis 를 load_notes(note_type="thesis") 로 확인.
+    1. thesis 가 있는 종목인데 출력에 thesis 참조가 없음 → ⚠ "thesis 미참조" 를 사용자에게 통지
+    2. thesis 미등록 종목이 있음 → ⚠ "테제 미등록: [종목명]" 을 통지
+  skip_condition: no_portfolio_context  # PF 밖의 단발 분석 시에는 스킵
+
+# ---------------------------------------------------------------------------
+# 정기 업무 (Routine Execution) (KIK-724)
+# ---------------------------------------------------------------------------
+routine:
+  daily:
+    auto_review: false       # 일일은 판단을 포함하지 않으므로 리뷰 불필요
+    output_mode: adaptive    # 이상 있음→전체 테이블 / 이상 없음→경량 3줄
+    save_to: "data/session_logs/routine/daily_{date}.json"
+  weekly:
+    auto_review: true        # 주간은 strategist 를 포함하므로 자동 리뷰
+    skip_review_when: "strategist 가 스킵된 경우"
+    progressive_output: true # Phase 완료마다 중간 결과를 출력
+    save_to: "data/session_logs/routine/weekly_{date}.json"
+    screener_condition: |
+      타깃 괴리 red/exit-rule 도달/밸류트랩 의심이 있는 경우에 기동.
+      ⚠️ screener 는 정보 수집. "하지 않기 체크" 는 screener 기동을 막지 않는다.
+      "하지 않기 체크" 해당 시에는 결과에 "📋 WL 후보 (매수 보류)" 라벨 부여.
+
+# ---------------------------------------------------------------------------
+# Output & Visibility v1 (KIK-729)
+# 4레이어 구성 (헤더/진행/본문/푸터) 의 적용 규칙
+# ---------------------------------------------------------------------------
+visualization:
+  layer1_header:
+    always_on: true              # Pattern A 포함 전 패턴에서 Layer1 헤더를 반드시 출력
+    source_priority:
+      - routing_yaml_header      # routing.yaml 의 `header` 필드 우선
+      - auto_generate            # 없으면 `[<agent>] <agent.role>` 로 자동 생성
+    format: "🎯 [<agent or chain>] <task summary>"
+
+  layer2_progress:
+    apply_when:
+      - flag: "progressive: true"
+      - condition: "agents.length >= 2"
+      - mode_match: "routine-*"
+    format: "✅ <agent_name> 완료 (X.Xs) — <1줄 요약>"
+
+  layer3_pattern:
+    selection:
+      - explicit: "routing.yaml 의 `pattern` 필드 (A|B|C)"
+      - auto_b: "agents.length == 1 (단일 에이전트) → Pattern B"
+      - auto_c: "agents.length >= 2 or progressive: true or mode: routine-* → Pattern C"
+      - require_a_explicit: true  # Pattern A 는 반드시 명시 지정
+
+  layer4_footer:
+    order:
+      - "📊 실행: <agent chain>"
+      - "💾 저장: <data path>"
+      - "🔍 Reviewer 로 체크할까요? [y/skip]"  # adhoc_review 대상 시에만
+      - "➡ 다음: <next action suggestion>"
+    skippable: true  # 불필요한 줄은 스킵 가능. 출력할 경우 순서 고정
+
+escalation:
+  - condition: "재시도 상한에 도달"
+    action: "현시점 결과를 그대로 제시하고 제한 사항을 명시한다"
+
+  - condition: "복수 에이전트가 모순된 결과를 반환"
+    action: "모순점을 정리해 사용자에게 판단을 맡긴다"
+
+human_in_the_loop:
+  # 사용자 확인이 필요한 조작 (그 외는 전부 자율 실행)
+  - "매매의 최종 실행 (buy/sell 의 --yes 확인)"
+  - "투자 판단의 최종 승인 (Strategist 추천 승인)"
+  - "Reviewer FAIL 시 리트라이 승인 (FAIL 이유와 수정 방침 제시)"
+  - "반려 상한 도달 시 계속 진행 여부 판단"

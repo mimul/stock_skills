@@ -1,0 +1,75 @@
+# PF 목표 배분 정의 (KIK-685)
+# 3라운드 × 6자(PM/엔지니어/투자전략가/GPT/Gemini/Grok) 논의로 확정
+# SSoT: 모든 에이전트(HC/Strategist/Reviewer/Risk Assessor)가 이 파일을 참조한다
+
+# --- 역할별 목표 (4LLM 스웜 승인 2026-04-24) ---
+role_targets:
+  normal:
+    income: [45, 55]      # %
+    growth: [25, 30]
+    hedge: [5, 5]
+    cash: [15, 20]
+  risk_off:
+    income: [50, 55]
+    growth: [10, 20]
+    hedge: [5, 10]
+    cash: [25, 35]
+  trigger_to_risk_off:
+    - "리스크 판정 점수 -3 이하"
+    - "VIX > 25"
+    - "강제 규칙 발동 (VIX>40, F&G<10, WTI>$110)"
+  covered_call_classification: "하이브리드. 커버드콜 ETF(JEPI, TIGER 미국배당다우존스타겟커버드콜 등)는 보유 비중을 50:50 으로 인컴+성장에 분할 카운트"
+
+# 포트폴리오 CSV 의 role 열 값 ↔ 위 역할 키 매핑
+role_labels:
+  income: "장기인컴"
+  growth: "성장"
+  hedge: "헤지"
+
+# --- 집중도 제약 (warn + limit 2단계) ---
+concentration:
+  single_stock:
+    warn: 10              # % — 주의 (yellow)
+    limit: 15             # % — 경고 (red)
+  top3_stocks:
+    warn: 30
+    limit: 40
+  sector:
+    warn: 20
+    limit: 30
+
+# --- 통화 제약 ---
+currency:
+  USD:
+    warn: 50
+    limit: 60             # lesson「USD 60% 초과 주의」
+  KRW:
+    floor: 25             # 생활통화 최저선
+
+# --- 지역 제약 (지원 지역: kr / us) ---
+geography:
+  min_regions: 2          # 최소 2지역(한국+미국) 보유
+  single_region:
+    warn: 70
+    limit: 85
+
+# --- 규모별 제약 (KIK-725) ---
+cap_size:
+  small_cap:
+    warn: 5               # % — PF 전체에서 소형주 비중
+    limit: 10
+  single_stock_small: 3    # % — 소형주 1종목당 상한
+  definition:
+    small_cap_threshold_krw: 500000000000    # 시가총액 5천억 원 이하 = 소형
+    small_cap_threshold_usd: 1000000000      # $1B 이하 = 소형
+
+# --- 이탈 판정 3단계 ---
+deviation_levels:
+  green: "warn 미만 — 정상"
+  yellow: "warn 이상 limit 미만 — 주의"
+  red: "limit 이상 — 경고"
+
+# --- 정책 ---
+policy:
+  auto_rebalance: false   # 자동 리밸런싱 강제 없음
+  alert_only: true        # 경고만, 최종 판단은 사용자

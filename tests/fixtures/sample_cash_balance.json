@@ -1,0 +1,18 @@
+{
+  "date": "2026-04-29",
+  "timestamp": "2026-04-29T00:00:00",
+  "total_krw": 10000000,
+  "breakdown": {
+    "KRW": {
+      "amount": 7200000
+    },
+    "USD": {
+      "amount": 2000.0,
+      "krw_equivalent": 2800000,
+      "rate_krw_per_usd": 1400.0
+    }
+  },
+  "changelog": [
+    "테스트용 샘플 픽스처 — 실제 현금 잔고가 아님"
+  ]
+}

@@ -1,0 +1,162 @@
+# Tools — 에이전트·스킬이 참조하는 툴 정의
+# 각 툴의 함수명·역할·사용 시점을 일원 관리한다.
+# 에이전트 (agent.md) 나 스킬 (SKILL.md) 은 이 파일을 참조하고,
+# 툴 목록을 하드코딩하지 않는다.
+
+tools:
+  yahoo_finance:
+    source: tools/yahoo_finance.py
+    functions:
+      screen_stocks:
+        description: "조건에 맞는 종목을 망라적으로 스크리닝（region: kr/us）"
+        when: "재투자·교체·후보 선정 시（필수）. AI 의 지식 베이스에서 수동 선정해서는 안 된다"
+      get_stock_info:
+        description: "개별 종목 지표 취득（PER/PBR/ROE/배당수익률/Beta 등）"
+        when: "후보 상세 확인 시, 헬스체크 시"
+      get_price_history:
+        description: "가격 이력 취득（RSI·SMA 등 테크니컬 계산용）"
+        when: "테크니컬 확인 시, 스트레스 테스트 시"
+
+  grok:
+    source: tools/grok.py
+    functions:
+      search_market:
+        description: "시장 동향·매크로 정보·업계 뉴스 검색"
+        when: "시황 파악 시, 매크로 조사 시"
+      search_x_sentiment:
+        description: "X(구 Twitter) 상의 투자자 센티먼트 취득"
+        when: "후보의 정성 평가 시, 시장 심리 확인 시"
+      bulk_x_search:
+        provider: "xAI Grok"
+        description: "X firehose 병렬 센티먼트（복수 쿼리 묶음）"
+        when: "투자자 센티먼트·$cashtag·특정 handle 을 여러 개 횡단할 때"
+        strength: "X firehose 독점 액세스（다른 LLM 불가）"
+        not_for: "공식 미디어·SEC/DART 공시（→ gemini.deep_research 사용）"
+        cost_per_call_usd: 0.5
+        max_calls_per_session: 5
+        note: "쿼리 1건당 sleep(0.5) 로 rate limit 배려. max_sources_per_call=10 으로 sources 과금 억제"
+      bulk_web_search:
+        provider: "xAI Grok"
+        description: "Grok web_search 병렬（속보 중시·사이트 필터 가능）"
+        when: "실시간 속보·X 반응과 Web 반응의 대비"
+        strength: "Grok 의 reasoning + web_search 통합"
+        not_for: "깊은 철저 조사（→ gemini.deep_research）"
+        cost_per_call_usd: 0.5
+        max_calls_per_session: 3
+        note: "allowed_domains 로 site 필터 가능（최대 5）"
+
+  graphrag:
+    source: tools/graphrag.py
+    functions:
+      get_context:
+        description: "과거 분석·lesson·thesis·관찰 메모 취득（Neo4j GraphRAG）"
+        when: "최초 분석 시（필수）. 종목의 과거 문맥을 바탕으로 한 판단에 사용"
+      sync_all:
+        description: "data/ → GraphRAG 일괄 동기화（notes + portfolio）"
+        when: "「sync 해 줘」「데이터 동기화해 줘」라고 했을 때"
+
+  llm:
+    source: tools/llm.py
+    functions:
+      call_llm:
+        description: "외부 LLM（GPT/Gemini/Grok）호출"
+        when: "멀티 LLM 리뷰 시, 4-Swarm 리뷰 시"
+        note: "모델명은 config/llm_routing.yaml 참조. 하드코딩 금지"
+      is_provider_available:
+        description: "지정 프로바이더의 API 키가 설정되어 있는지 확인"
+        when: "LLM 호출 전 체크"
+      gemini_deep_research:
+        provider: "Google Gemini"
+        description: "Gemini Deep Research API: Web 전반을 자율 순회（80-160 sources）+ 인용 포함 리포트 생성"
+        when: "업계 전체상·규제 동향·공식 IR·DART/SEC 공시·매크로를 철저히 조사할 때"
+        strength: "Google Search Grounding. 1 태스크로 다수 소스를 통합한 깊은 분석"
+        not_for: "X/Twitter 내 데이터（→ grok.bulk_x_search）"
+        cost_per_call_usd: 2.5
+        max_calls_per_session: 2
+        note: "depth=light/medium/heavy. wall_time 30min 하드 캔슬. DEEPTHINK_DR_ENABLED=off 로 정지"
+      is_deep_research_enabled:
+        description: "Gemini DR 의 kill switch 상태 확인 (DEEPTHINK_DR_ENABLED)"
+        when: "DR 기동 전 체크"
+
+  notes:
+    source: tools/notes.py
+    functions:
+      load_notes:
+        description: "교훈(lesson)·투자 메모(thesis/observation) 읽기"
+        when: "최초 분석 시（필수）. 과거 교훈과의 대조에 사용"
+      save_note:
+        description: "투자 메모·교훈 저장"
+        when: "분석 결과에서 교훈을 기록할 때"
+      check_exit_rule:
+        description: "exit-rule 노트의 손절/익절 임계값과 현재 손익률을 대조"
+        when: "매도 판단 시（필수）. 사전 설정한 철수 규칙과의 대조에 사용"
+
+  portfolio_io:
+    source: tools/portfolio_io.py
+    functions:
+      load_portfolio:
+        description: "포트폴리오 보유 현황 읽기（CSV）"
+        when: "PF 관련 테마 시（필수）. 배분·통화(KRW/USD)·역할 분석에 사용"
+      load_cash_balance:
+        description: "현금 잔고 읽기（cash_balance.json, total_krw 기준）"
+        when: "PF 총자산 계산 시（필수）. Cash% 비율 산출에는 load_total_assets 권장"
+        note: "KIK-734: HC/Risk Assessor 는 cash_balance.json 을 반드시 참조할 것"
+      load_total_assets:
+        description: "PF 총자산（주식 + 현금）의 SSoT 함수"
+        when: "PF 총자산·Cash% 계산 시（필수）. load_portfolio + load_cash_balance 를 일괄 취득"
+        note: "KIK-734: 반환값 {positions, cash, cash_krw, has_cash}. HC/Risk 의 현금 참조 누락 방지"
+
+  sanity_gate:
+    source: src/data/sanity_gate.py
+    functions:
+      assert_pf_complete:
+        description: "PF 총자산 계산의 현금 참조 누락을 assert 로 방지"
+        when: "추천 생성 전（필수）. HC/Risk Assessor 에서 PF 비율을 내기 전에 통과시킨다"
+      assert_lot_size:
+        description: "한국·미국 모두 1주 단위, shares 가 양의 정수인지 검증"
+        when: "매매 제안 시（필수）. 수량 자릿수 실수·0주/음수 제안 방지"
+      assert_conviction_respected:
+        description: "conviction 종목에 대한 매도·트림 제안 금지 assert"
+        when: "매매 제안 시（필수）. 홀드 확정 종목 보호"
+      run_all_gates:
+        description: "위 3개 gate 를 일괄 실행하는 편의 함수"
+        when: "PF 철저 리뷰·철저 조사·주간 routine 실행 시"
+        note: "KIK-734: 자연어 제약이 아니라 코드 강제. fail 시 SanityGateError"
+
+  preflight:
+    source: src/data/preflight.py
+    functions:
+      run_preflight:
+        description: "DeepThink 기동 전/Step5 전 게이트（cash_balance / conviction / lot_size 를 일괄 검증）"
+        when: "DeepThink Step 0 과 Step 5 직전（필수）. PF 계 테마에서는 domain='pf'"
+        note: "KIK-735: sanity_gate 의 래퍼. conviction 은 data/notes/thesis 에서 자동 추출"
+      extract_convictions:
+        description: "thesis 노트에서 conviction 종목 리스트 추출"
+        when: "Strategist/Reviewer 기동 시 conviction 주입용으로 취득"
+
+  watchlist:
+    source: tools/watchlist.py
+    functions:
+      load_watchlist:
+        description: "워치리스트 읽기"
+        when: "워치 중인 종목 참조 시"
+
+  scoring:
+    source: tools/scoring.py
+    functions:
+      score_quality:
+        description: "개별 종목의 3축 품질 스코어（환원성·성장성·지속성）+ 4사분면 분류"
+        when: "종목의 질을 정량 평가할 때, 교체 후보 비교 시"
+      score_portfolio:
+        description: "PF 전 종목 일괄 스코어링 + 4사분면 분류（보유/추가 매수/요관찰/매도 검토）"
+        when: "PF 전체 품질 평가, 요관찰 종목 특정 시"
+
+  morning_summary:
+    source: tools/morning_summary.py
+    functions:
+      detect_alerts:
+        description: "PF 전 종목의 수치 기반 이상 감지（exit-rule/RSI/실적 발표 임박/VIX）"
+        when: "아침 서머리 시, PF 의 이상 유무를 확인할 때"
+      format_morning_summary:
+        description: "이상 감지 결과를 1분 안에 읽을 수 있는 서머리로 포맷"
+        when: "detect_alerts 결과를 사람이 읽기 좋게 정형화할 때"

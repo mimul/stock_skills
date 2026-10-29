@@ -1,0 +1,196 @@
+# Health Checker Agent — Few-shot Examples
+# 수치는 샘플. 사실·수치만 낸다. 판단·추천은 하지 않는다.
+#
+# Output & Visibility v1 (KIK-729):
+#   - Layer1 헤더(🎯 [agent] task)는 오케스트레이터 쪽에서 기동 전에 부여된다
+#   - 각 example의 output은 Layer3 본체만 기술한다 (헤더는 포함하지 않음)
+
+examples:
+  # === 아침 요약 (KIK-717) ===
+  - intent: "좋은 아침"
+    mode: morning-summary
+    steps:
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_stock_info
+        params: { symbols: "전 보유 종목 + ^VIX" }
+      - tool: yahoo_finance.get_price_history
+        params: { symbols: "전 보유 종목", period: "1mo" }
+        note: "RSI 계산용"
+      - tool: morning_summary.detect_alerts
+        note: "exit-rule/RSI/실적 발표 임박/VIX의 수치 기반 이상 검지"
+      - tool: morning_summary.format_morning_summary
+      - tool: notes.load_notes
+        params: { note_type: "target" }
+        note: "미실행 예정 노트를 취득 (KIK-723)"
+      - output: |
+          이상 없음 → ☀️ 이상 없음 (1줄)
+          이상 있음 → ⚠️ N건 + 상세 + 심층 분석 안내 (최대 10줄)
+          target 노트 있음 → 말미에 "📌 미실행 예정 N건 있음 ("TODO 보여줘"로 확인)"
+          target 노트 0건 → 리마인드 줄 없음
+    reasoning: "수치 기반 이상 검지만. 판단·추천은 하지 않는다. target 리마인드는 건수 표시만"
+
+  - intent: "아침 요약"
+    mode: morning-summary
+    note: "'좋은 아침'과 동일. routing.yaml의 triggers 참조"
+
+  # === TODO/예정 확인 (KIK-723) ===
+  - intent: "TODO 보여줘"
+    steps:
+      - tool: notes.load_notes
+        params: { note_type: "target" }
+        note: "target 노트를 전건 취득"
+      - output: |
+          📋 미실행 예정 (N건):
+            - [symbol]: [content] ([date])
+            ...
+          0건 → "📋 미실행 예정이 없습니다"
+    reasoning: "target 노트 내용을 목록 표시. 판단·추천은 하지 않는다"
+
+  # === 정기 업무: 일간 (KIK-724) ===
+  - intent: "정기 업무"
+    mode: routine-daily
+    steps:
+      - tool: morning_summary.detect_alerts
+        note: "이상 검지 (아침 요약과 같은 로직)"
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_stock_info
+        params: { symbols: "전 보유 종목 + ^VIX" }
+      - tool: yahoo_finance.get_price_history
+        params: { symbols: "전 보유 종목", period: "1mo" }
+      - code: "각 종목의 RSI, SMA50/200, 손익률을 계산"
+      - read: "config/allocation.yaml"
+        note: "타깃 괴리 체크 (KIK-685)"
+      - tool: notes.load_notes
+        params: { note_type: "target" }
+        note: "WL 알림 + target 리마인드"
+      - output: |
+          이상 있음 → 전체 테이블 (PF 개황 + 알림 + 시황 + 괴리 + WL)
+          이상 없음 → 경량 3줄 (평가액 + 변동 + 한마디)
+    reasoning: "일간 루틴. HC 담당분. 시황 + researcher는 병렬로 별도 Agent 기동"
+
+  # === PF 헬스체크 ===
+  - intent: "PF 괜찮아?"
+    steps:
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_price_history
+        params: { symbols: "전 보유 종목", period: "1y" }
+      - code: "각 종목의 RSI, SMA50/200, 손익률을 계산"
+      - tool: notes.load_notes
+        params: { symbol: "각 종목", note_type: "thesis" }
+        note: "thesis가 있는 종목은 '테제 전제 vs 실적' 줄을 출력에 포함 (KIK-715)"
+      - output: |
+          각 종목의 테크니컬 지표·손익률·크로스 검출 결과를 제시. 수치만.
+          thesis가 있는 종목에는 추가 줄:
+            테제: [테제 요약 1줄]
+            테제 전제 vs 실적: [key_kpi의 현재값과 비교]
+          thesis 미등록 종목: ⚠ 테제 미등록
+    reasoning: "사실만 제시. 테제 유효/무효 판단은 하지 않는다. 전제와 실적의 수치 비교만"
+
+  # === 크로스 검출 ===
+  - intent: "골든크로스 난 종목 있어?"
+    steps:
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_price_history
+        params: { symbols: "전 보유 종목", period: "1y" }
+      - code: |
+          SMA50과 SMA200을 계산.
+          최근 5일 내 SMA50이 SMA200을 아래에서 위로 돌파 → 골든크로스
+          최근 5일 내 SMA50이 SMA200을 위에서 아래로 돌파 → 데드크로스
+      - output: "크로스 이벤트 목록(종목·날짜·타입)을 제시. 수치만"
+    reasoning: "크로스 검출 사실만. 매수/매도 시그널 판단은 하지 않는다"
+
+  # === 스트레스 테스트 ===
+  - intent: "폭락하면 어떻게 돼?"
+    steps:
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_price_history
+        params: { symbols: "전 보유 종목", period: "1y" }
+      - code: "상관 분석 + 충격 민감도 계산 + VaR 산출"
+      - output: |
+          시나리오별 손실액·VaR를 금액으로 제시:
+          코스피 급락: -₩X,XXX,XXX (-X.X%)
+          원화 급락(USD/KRW 급등): -₩X,XXX,XXX (-X.X%)
+          테크 폭락: -₩X,XXX,XXX (-X.X%)
+          VaR(95%): -₩X,XXX,XXX / VaR(99%): -₩X,XXX,XXX
+          수치만
+    reasoning: "손실액을 금액과 % 둘 다로 제시. 헤지 제안은 하지 않는다"
+
+  # === PF 구조 분석 (KIK-685: 타깃 괴리 표시) ===
+  - intent: "섹터 치우치지 않았어?"
+    steps:
+      - read: "portfolio.csv"
+      - read: "config/allocation.yaml"
+        note: "타깃 정의를 취득 (KIK-685 SSoT)"
+      - code: "각 섹터/지역/통화/규모 비율을 계산. allocation.yaml의 warn/limit과 비교하여 3단계(green/yellow/red) 판정"
+      - output: |
+          비율 사실을 제시. 수치만. 타깃 열과 괴리 상태를 추가:
+          | 축 | 타깃 | 현재 | 상태 |
+          | 섹터 집중 | <30% | Technology 17% | 🟢 |
+          | USD 비율 | <60% | 58% | 🟡 warn 초과 |
+    reasoning: "비율 + 타깃 괴리만 낸다. 치우침 판단은 하지 않는다"
+
+  # === 복수 지표가 모순되는 케이스 ===
+  - intent: "테크니컬과 펀더멘털이 모순되는 종목은?"
+    steps:
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_stock_info
+        params: { symbols: "전 보유 종목" }
+      - tool: yahoo_finance.get_price_history
+        params: { symbols: "전 보유 종목", period: "1y" }
+      - code: |
+          각 종목에서 다음 모순 패턴을 검출:
+          RSI>70 + PER<10 → 테크니컬 과열 vs 펀더멘털 저평가
+          RSI<30 + EPS 성장률>15% → 테크니컬 과매도 vs 펀더멘털 호조
+          SMA 골든크로스 + 이익 감소 → 테크니컬 강세 vs 펀더멘털 약세
+      - output: "모순 패턴에 해당하는 종목과 수치를 제시. 수치만"
+    reasoning: "모순 사실을 낸다. 어느 쪽이 맞는지 판단은 하지 않는다"
+
+  # === 시황 정량 ===
+  - intent: "VIX는?"
+    steps:
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "^VIX" }
+      - tool: yahoo_finance.get_price_history
+        params: { symbol: "^VIX", period: "3mo" }
+      - output: "현재값 + 3개월 추이를 제시. 수치만"
+    reasoning: "VIX 수준의 수치만. 경계/안심 판단은 하지 않는다"
+
+  - intent: "시황 체크"
+    steps:
+      - tool: yahoo_finance.get_stock_info
+        params: { symbols: ["^KS11", "^KQ11", "^GSPC", "^IXIC", "^VIX", "KRW=X", "^TNX"] }
+      - tool: yahoo_finance.get_price_history
+        params: { symbols: ["^KS11", "^GSPC", "^VIX", "KRW=X"], period: "1mo" }
+      - output: "주요 지표의 현재값·전일 대비·1개월 추이를 제시. 수치만"
+    reasoning: "정량 데이터만. 시장 온도감 판단은 하지 않는다"
+
+  # === 시황 + PF 상관 ===
+  - intent: "지금 시황에서 PF에 미치는 영향은?"
+    steps:
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_price_history
+        params: { symbols: "전 보유 종목 + ^KS11 + ^GSPC + ^VIX + KRW=X", period: "3mo" }
+      - code: |
+          PF 전체의 Beta를 계산 (한국 종목은 KOSPI, 미국 종목은 S&P500 대비)
+          PF 가중평균 RSI를 계산
+          PF vs 시장 지수의 상관계수를 계산
+          USD 자산 비중 × USD/KRW 변동으로 환율 민감도를 계산
+      - output: "PF의 Beta, 가중평균 RSI, 시장 상관, 환율 민감도를 제시. 수치만"
+    reasoning: "PF와 시장의 관계성 사실만. 대책 제안은 하지 않는다"
+
+  # === Forecast ===
+  - intent: "기대수익률은?"
+    steps:
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_stock_detail
+        params: { symbols: "전 보유 종목" }
+      - code: "3개 시나리오(낙관/기본/비관)의 수익률 추정"
+      - output: "PF 전체의 기대수익률 수치를 제시. 수치만"
+    reasoning: "수치만. 투자 판단은 하지 않는다"
+
+tool_responsibilities:
+  - yahoo_finance: 데이터 취득만 (가격·재무)
+  - graphrag: 과거 데이터 취득만
+  - notes: thesis 참조만 (KIK-715. 테제 전제 vs 실적의 수치 비교용)
+  - 테크니컬 계산(RSI/SMA/Beta/VaR)은 에이전트가 code interpreter로 실행
+  - portfolio.csv는 파일 직접 읽기

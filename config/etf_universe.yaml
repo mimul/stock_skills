@@ -1,0 +1,64 @@
+# ETF 기본 목록 (KIK-725)
+# Strategist/Screener 가 PF 부족 요소를 보완할 후보로 참조한다
+# yfinance EquityQuery 로는 ETF 를 가져올 수 없으므로 기본 목록으로 보완
+# 한국 ETF 코드는 yfinance 조회로 검증 완료 (2026-10-28)
+
+# --- 고배당·인컴 ---
+dividend:
+  - { symbol: 279530.KS, name: "KODEX 고배당", category: "high-dividend", region: kr }
+  - { symbol: 161510.KS, name: "PLUS 고배당주", category: "high-dividend", region: kr }
+  - { symbol: 211900.KS, name: "KODEX 배당성장", category: "dividend-growth", region: kr }
+  - { symbol: 458730.KS, name: "TIGER 미국배당다우존스", category: "dividend-growth", region: kr }
+  - { symbol: 402970.KS, name: "ACE 미국배당다우존스", category: "dividend-growth", region: kr }
+  - { symbol: JEPI, name: "JPMorgan Equity Premium Income", category: "covered-call", region: us }
+  - { symbol: SCHD, name: "Schwab US Dividend Equity", category: "dividend-growth", region: us }
+  - { symbol: VYM, name: "Vanguard High Dividend Yield", category: "high-dividend", region: us }
+
+# --- 채권·현금성·헤지 ---
+bond:
+  - { symbol: 114260.KS, name: "KODEX 국고채3년", category: "ktb-short", region: kr }
+  - { symbol: 148070.KS, name: "KIWOOM 국고채10년", category: "ktb-long", region: kr }
+  - { symbol: 153130.KS, name: "KODEX 단기채권", category: "cash-like", region: kr }
+  - { symbol: 157450.KS, name: "TIGER 단기통안채", category: "cash-like", region: kr }
+  - { symbol: AGG, name: "iShares Core US Aggregate Bond", category: "aggregate-bond", region: us }
+  - { symbol: TLT, name: "iShares 20+ Year Treasury Bond", category: "long-treasury", region: us }
+  - { symbol: SHV, name: "iShares Short Treasury Bond", category: "short-treasury", region: us }
+
+# --- 섹터 ---
+sector:
+  - { symbol: 091160.KS, name: "KODEX 반도체", category: "semiconductor", region: kr }
+  - { symbol: 091170.KS, name: "KODEX 은행", category: "bank", region: kr }
+  - { symbol: 091180.KS, name: "KODEX 자동차", category: "auto", region: kr }
+  - { symbol: 266420.KS, name: "KODEX 헬스케어", category: "healthcare", region: kr }
+  - { symbol: 305720.KS, name: "KODEX 2차전지산업", category: "battery", region: kr }
+  - { symbol: 139260.KS, name: "TIGER 200 IT", category: "technology", region: kr }
+  - { symbol: 139270.KS, name: "TIGER 200 금융", category: "financial", region: kr }
+  - { symbol: 139230.KS, name: "TIGER 200 중공업", category: "heavy-industry", region: kr }
+  - { symbol: XLK, name: "Technology Select Sector SPDR", category: "technology", region: us }
+  - { symbol: XLV, name: "Health Care Select Sector SPDR", category: "healthcare", region: us }
+  - { symbol: XLE, name: "Energy Select Sector SPDR", category: "energy", region: us }
+  - { symbol: XLF, name: "Financial Select Sector SPDR", category: "financial", region: us }
+
+# --- 원자재·헤지 ---
+commodity:
+  - { symbol: 132030.KS, name: "KODEX 골드선물(H)", category: "gold", region: kr }
+  - { symbol: 411060.KS, name: "ACE KRX금현물", category: "gold", region: kr }
+  - { symbol: GLDM, name: "SPDR Gold MiniShares", category: "gold", region: us }
+  - { symbol: IAU, name: "iShares Gold Trust", category: "gold", region: us }
+
+# --- 대표지수·글로벌 ---
+index:
+  - { symbol: 069500.KS, name: "KODEX 200", category: "kospi200", region: kr }
+  - { symbol: 102110.KS, name: "TIGER 200", category: "kospi200", region: kr }
+  - { symbol: 229200.KS, name: "KODEX 코스닥150", category: "kosdaq150", region: kr }
+  - { symbol: 360750.KS, name: "TIGER 미국S&P500", category: "us-sp500", region: kr }
+  - { symbol: 133690.KS, name: "TIGER 미국나스닥100", category: "us-nasdaq100", region: kr }
+  - { symbol: VT, name: "Vanguard Total World Stock", category: "global-equity", region: us }
+  - { symbol: VTI, name: "Vanguard Total Stock Market", category: "us-total", region: us }
+  - { symbol: VWO, name: "Vanguard FTSE Emerging Markets", category: "emerging", region: us }
+
+# --- 소형주 ---
+small_cap:
+  - { symbol: 229200.KS, name: "KODEX 코스닥150", category: "kr-small-mid", region: kr }
+  - { symbol: VB, name: "Vanguard Small-Cap", category: "us-small", region: us }
+  - { symbol: IJR, name: "iShares Core S&P Small-Cap", category: "us-small", region: us }

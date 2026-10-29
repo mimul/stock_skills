@@ -1,0 +1,82 @@
+# stock-skills 에이전트 E2E 테스트 시나리오
+# 각 시나리오는 에이전트 워크플로우 전체를 end-to-end 로 검증한다.
+
+scenarios:
+  - id: e2e_001
+    name: "Screener E2E"
+    input: "좋은 한국 주식 있어?"
+    expected_agent: screener
+    eval_criteria:
+      - "종목 리스트가 1건 이상 반환된다"
+      - "각 종목에 symbol, name 이 포함된다"
+      - "PER, PBR, ROE 등의 지표가 포함된다"
+      - "region 이 kr 이다 (.KS/.KQ, exchange KSC/KOE)"
+    timeout_sec: 120
+
+  - id: e2e_002
+    name: "Analyst E2E"
+    input: "005930.KS 어때?"
+    expected_agent: analyst
+    eval_criteria:
+      - "PER, PBR, ROE, 배당수익률 등의 기본 지표가 포함된다"
+      - "밸류에이션 판정 (저평가/적정/고평가) 이 포함된다"
+      - "테크니컬 지표 (RSI, SMA) 가 포함된다"
+      - "종합 스코어 또는 판정이 포함된다"
+    timeout_sec: 120
+
+  - id: e2e_003
+    name: "Health Checker E2E"
+    input: "PF 괜찮아?"
+    expected_agent: health-checker
+    eval_criteria:
+      - "전 보유 종목의 손익률이 표시된다"
+      - "RSI 가 계산되어 있다"
+      - "thesis/observation 이 로드되어 있다 (KIK-695)"
+      - "섹터/지역/통화 구성 비율이 포함된다"
+    timeout_sec: 180
+
+  - id: e2e_004
+    name: "Researcher E2E"
+    input: "최신 뉴스 알려줘"
+    expected_agent: researcher
+    eval_criteria:
+      - "뉴스 또는 센티먼트 정보가 포함된다"
+      - "Grok API 가 호출된다 (또는 API 미설정 시 fallback)"
+      - "시황에 관한 정보가 포함된다"
+    timeout_sec: 120
+
+  - id: e2e_005
+    name: "Risk Assessor E2E"
+    input: "리스크 판정해줘"
+    expected_agent: risk-assessor
+    eval_criteria:
+      - "risk-on / neutral / risk-off 중 하나의 판정이 반환된다"
+      - "F&G, VIX 등의 근거 데이터가 포함된다"
+      - "geopolitical adjustment 가 고려되어 있다"
+    timeout_sec: 120
+
+  - id: e2e_006
+    name: "HC + Strategist Chain E2E"
+    input: "PF 개선하고 싶어"
+    expected_agent: "[health-checker, strategist]"
+    eval_criteria:
+      - "Health Checker 의 수치 데이터가 포함된다"
+      - "Strategist 의 추천이 포함된다"
+      - "what-if 시뮬레이션 결과가 포함된다"
+      - "lesson 이 참조되어 있다"
+      - "thesis 가 참조되어 있다 (KIK-695)"
+    timeout_sec: 300
+
+  - id: e2e_007
+    name: "DeepThink 4-Swarm E2E"
+    input: "포트폴리오를 개선하고 싶어 (DeepThink)"
+    expected_agent: "deepthink"
+    eval_criteria:
+      - "deepthink_limits.yaml 이 올바른 값 (max_agent_spawns>=20, max_llm_calls>=25)"
+      - "각 LLM 프로바이더 (GPT/Gemini/Grok) 에 접속 가능 (또는 graceful degradation)"
+      - "Grok search 함수가 이용 가능 (또는 graceful degradation)"
+      - "SKILL.md 에 2층 모델 (인프라층+추론층) 의 기술이 있다"
+      - "적성 매트릭스·하드 제약의 정의가 있다"
+      - "SKILL.md 에 이그제큐티브 서머리·통합 결론의 포맷이 있다"
+      - "llm_capabilities.yaml 에 전 프로바이더 정의가 있다"
+    timeout_sec: 120

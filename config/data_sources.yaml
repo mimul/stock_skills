@@ -1,0 +1,42 @@
+# 데이터 소스 SSoT (KIK-736).
+#
+# 도메인 → required (반드시 존재) / recommended (가능하면 로드).
+# DeepThink Step 0 은 도메인을 조회해 required 항목이 로드 가능한지
+# 확인(assert)한 뒤 진행한다.
+#
+# 각 항목은 `path:` (리포 루트 기준 상대 경로) 또는 `tool:` 참조
+# (`config/tools.yaml` 과 일치) 중 하나다.
+
+domains:
+  pf:
+    description: "포트폴리오 분석: 보유 종목 + 현금(KRW/USD) + thesis/exit-rule 노트"
+    required:
+      - path: data/portfolio.csv
+      - path: data/cash_balance.json
+    recommended:
+      - path: data/notes/  # thesis / observation / exit-rule / lesson
+      - path: data/history/trade/
+
+  market:
+    description: "시장 국면 / 매크로(KOSPI·KOSDAQ·S&P500·VIX·USD/KRW 등) / 섹터 시그널"
+    required:
+      - tool: yahoo_finance.get_stock_info
+    recommended:
+      - tool: grok.search_market
+      - tool: grok.search_x_sentiment
+
+  sector:
+    description: "섹터 로테이션 / 테마 분석（벤치마크 KODEX 200, 한국 섹터 ETF）"
+    required:
+      - tool: yahoo_finance.get_stock_info
+    recommended:
+      - tool: grok.search_industry
+
+  stock:
+    description: "개별 종목 분석 (analyst / researcher)"
+    required:
+      - tool: yahoo_finance.get_stock_info
+      - tool: yahoo_finance.get_price_history
+    recommended:
+      - tool: grok.search_stock_deep
+      - path: data/notes/  # thesis / observation

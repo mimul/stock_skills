@@ -1,0 +1,122 @@
+# 3축 품질 스코어링 설정 (KIK-708)
+# v3.1 — 4LLM×3라운드 + 5에이전트 리뷰 + 3LLM 최종 승인으로 확정
+
+# ---------------------------------------------------------------------------
+# 각 축의 구성 요소 가중치
+# ---------------------------------------------------------------------------
+weights:
+  return:
+    yield: 0.45         # 주주환원수익률 (배당 + 자사주매입)
+    coverage: 0.35      # 이익 커버리지 (EPS÷DPS)
+    consistency: 0.20   # 환원의 일관성 (배당성향 건전성)
+
+  growth:
+    organic: 0.30       # 정규화 유기적 성장 max(EG, RG)
+    roic: 0.25          # ROIC (ROA 근사)
+    cashflow: 0.15      # 조정 현금흐름 전환율
+    runway: 0.20        # 성장 활주로 (섹터별)
+    capital: 0.10       # 자본 배분 역량
+
+  durability:
+    financial: 0.30     # 재무 건전성 (이자보상배율)
+    earnings: 0.30      # 이익 내구성 (영업이익률 × 안정성)
+    model: 0.20         # 사업모델 내성 (이익률 유지 연수)
+    liquidity: 0.20     # 유동성 (유동비율)
+
+  total:
+    durability: 0.45    # "먼저 살아남는다"가 최우선
+    growth: 0.35        # 복리 효과의 원천
+    return: 0.20        # 결과 지표
+
+# ---------------------------------------------------------------------------
+# 프리셋 연동 종합 가중치 오버라이드 (KIK-725)
+# score_quality(preset_weight=...) 로 동적 전환
+# 모든 프리셋에서 durability ≥ 0.30 유지 (지뢰 회피 가드레일)
+# ---------------------------------------------------------------------------
+preset_overrides:
+  growth:
+    total: { durability: 0.35, growth: 0.50, return: 0.15 }
+    description: "성장 중시. 소형 성장주/discovery/high-growth 용"
+  income:
+    total: { durability: 0.45, growth: 0.20, return: 0.35 }
+    description: "환원 중시. high-dividend/shareholder-return/long-term 용"
+  # default (위 total 섹션) 는 value/quality/alpha 등에 적용
+
+# ---------------------------------------------------------------------------
+# 임계값·페널티
+# ---------------------------------------------------------------------------
+thresholds:
+  # D/E 페널티 (단계적으로 엄격화)
+  de_penalty:
+    level1: 100         # >100% → 재무 건전성(A) cap 5
+    level2: 200         # >200% → 재무 건전성(A) cap 3
+    hard_cap: 250       # >250% → 지속성 전체 ≤ 3
+
+  # 지속성 → 환원성 연동 cap
+  cap_rules:
+    - durability_below: 3
+      return_max: 4
+    - durability_below: 5
+      return_max: 6
+
+  # 무배당주 임계값
+  zero_div_yield: 1.0  # yield < 1% → 무배당주 취급 (B, C 미적용)
+
+  # 성장성 상한
+  organic_growth_cap: 30    # 유기적 성장률 상한 (%)
+  roic_cap: 30              # ROIC 상한 (%)
+  coverage_cap: 3.0         # EPS/DPS 커버리지 상한 (배)
+
+# ---------------------------------------------------------------------------
+# 4분면 분류 (위에서부터 우선 판정, 배타적·망라적)
+# ---------------------------------------------------------------------------
+quadrants:
+  sell:
+    durability_below: 3     # 또는 cap 발동
+  watch:
+    durability_below: 5
+    total_below: 5
+  add:
+    total_min: 7
+    all_axes_min: 4
+  # hold = 기본값 (위 어느 것에도 해당하지 않음)
+
+# ---------------------------------------------------------------------------
+# 성장 활주로의 섹터별 기본값 (0-10)
+# ---------------------------------------------------------------------------
+growth_runway:
+  sector_defaults:
+    Technology: 8
+    Healthcare: 6
+    Communication Services: 5
+    Consumer Cyclical: 4
+    Consumer Defensive: 3
+    Financial Services: 3
+    Industrials: 4
+    Energy: 2
+    Utilities: 3
+    Real Estate: 3
+    Basic Materials: 3
+  fallback: 4
+
+# ---------------------------------------------------------------------------
+# 지속성 B: 산업별 영업이익률 divisor (KIK-709)
+# 기술 섹터 내에서도 하드웨어 제조업은 마진이 낮으므로 divisor=3
+# 한국 시장 특성: 반도체·2차전지·조선 등 장치산업은 마진 변동이 커서 동일 규칙 적용
+# ---------------------------------------------------------------------------
+industry_divisors:
+  Computer Hardware: 3
+  Electronic Components: 3
+  Scientific & Technical Instruments: 3
+  Specialty Industrial Machinery: 3
+  Auto Manufacturers: 2
+  Auto Parts: 2
+
+# ---------------------------------------------------------------------------
+# 비대칭 베타 안정성 승수
+# ---------------------------------------------------------------------------
+stability_beta:
+  low_beta_coeff: 0.05    # beta<1: max(floor, 1-(1-β)×coeff)
+  low_beta_floor: 0.90
+  high_beta_coeff: 0.20   # beta≥1: max(floor, 1-(β-1)×coeff)
+  high_beta_floor: 0.75

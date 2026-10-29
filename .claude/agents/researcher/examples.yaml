@@ -1,0 +1,161 @@
+# Researcher Agent — Few-shot Examples
+# 수치는 샘플이다. 에이전트가 사용자의 의도에 따라 자율적으로 판단한다.
+# 모든 패턴에서 먼저 GraphRAG 로 과거 리서치 이력을 확인한다.
+# region 은 kr / us 두 가지만 사용한다 (기본 kr).
+
+examples:
+  # === 종목 리서치 (stock) ===
+  - intent: "삼성전자 최신 뉴스"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "삼성전자 최신 뉴스" }
+      - tool: grok.search_stock_deep
+        params: { symbol: "005930.KS", company_name: "삼성전자" }
+      - judge: "뉴스 요약 + 카탈리스트(실적·HBM·공시) + 센티먼트 + 과거 리서치와의 차분"
+    reasoning: "기업명→티커 변환. 컨텍스트→Grok 검색→차분 분석. 한국 종목은 한국어 회사명을 넘겨 한국어 프롬프트로 검색"
+
+  - intent: "NVDA 를 깊게 파줘"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "NVDA 심층 조사" }
+      - tool: grok.search_stock_deep
+        params: { symbol: "NVDA", company_name: "NVIDIA" }
+      - tool: grok.search_x_sentiment
+        params: { symbol: "NVDA", company_name: "NVIDIA" }
+      - judge: "뉴스 + X 센티먼트를 통합해 심층 리포트"
+    reasoning: "심층 요청 → stock_deep + sentiment 둘 다 실행. 미국 종목은 영어 회사명"
+
+  - intent: "에코프로비엠 센티먼트는?"
+    steps:
+      - tool: grok.search_x_sentiment
+        params: { symbol: "247540.KQ", company_name: "에코프로비엠" }
+      - judge: "긍정/부정 의견 + 스코어(-1.0~1.0)를 제시. 개인 투자자 쏠림이 큰 종목이므로 과열 여부도 한 줄"
+    reasoning: "센티먼트 특화. stock_deep 은 불필요"
+
+  # === 과거와의 차분 분석 ===
+  - intent: "SK하이닉스 지난번 조사 이후 변화는?"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "SK하이닉스 변화" }
+      - tool: grok.search_stock_deep
+        params: { symbol: "000660.KS", company_name: "SK하이닉스" }
+      - judge: |
+          전회 리서치(컨텍스트에서 취득)와의 차분을 명시:
+          - 새 카탈리스트 (전회에는 없던 재료)
+          - 센티먼트 변화 (전회 스코어와 비교)
+          - 뉴스 방향성 변화 (긍정→부정, 부정→긍정 등)
+          - 외국인/기관 수급 방향 변화
+    reasoning: "차분 분석. 전회 데이터가 있으면 반드시 비교한다"
+
+  # === 복합 질문 ===
+  - intent: "현대차 뉴스랑 비즈니스 모델 알려줘"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "현대차 뉴스 비즈니스 모델" }
+      - tool: grok.search_stock_deep
+        params: { symbol: "005380.KS", company_name: "현대차" }
+      - tool: grok.search_business
+        params: { symbol: "005380.KS", company_name: "현대차" }
+      - judge: "뉴스 + 비즈니스 모델을 통합. 사업에 미치는 영향을 분석"
+    reasoning: "복합 질문 → stock_deep + business 둘 다 실행해 통합"
+
+  # === RECENT 모드 ===
+  - intent: "NVDA 최신은? (전회 리서치가 1주일 전)"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "NVDA 최신" }
+      - judge: "신선도=RECENT → 차분만 취득. 전회 대비 변화점에 초점"
+      - tool: grok.search_x_sentiment
+        params: { symbol: "NVDA", company_name: "NVIDIA" }
+      - judge: "센티먼트 변화만 보고. 풀 리서치는 하지 않음"
+    reasoning: "RECENT → 가벼운 갱신. 전 항목 재취득은 하지 않는다"
+
+  # === 업계 분석 (industry) ===
+  - intent: "반도체 업계 동향"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "반도체 업계 동향" }
+      - tool: grok.search_industry
+        params: { industry_or_theme: "반도체 semiconductor HBM 업계 동향" }
+      - judge: "업계 트렌드 + 주요 플레이어(삼성전자·SK하이닉스·장비주) + 성장 드라이버 + 리스크"
+    reasoning: "업계명을 검출. 한·영 키워드를 조합해 검색"
+
+  - intent: "2차전지 업계 조사해줘"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "2차전지 업계" }
+      - tool: grok.search_industry
+        params: { industry_or_theme: "2차전지 배터리 EV battery 업계 동향 2026" }
+      - judge: "트렌드 + 플레이어(LG에너지솔루션·삼성SDI·에코프로비엠) + 정책 동향(IRA·관세)"
+    reasoning: "테마→업계 분석. 연도를 붙여 최신 정보를 우선"
+
+  # === 시장 개황 (market) ===
+  - intent: "지금 장 어때?"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "지금 장" }
+      - tool: grok.search_market
+        params: { market_or_index: "코스피 코스닥 미국 증시 시황 2026" }
+      - judge: "시황 요약 + 섹터 로테이션 + 리스크 요인(외국인 수급·USD/KRW·공매도) + 주목 이벤트"
+    reasoning: "시장 전체가 대상. 폭넓은 키워드로 검색. 기본 지역은 한국"
+
+  - intent: "미국 시장 센티먼트"
+    steps:
+      - tool: grok.search_market
+        params: { market_or_index: "US stock market sentiment S&P500 NASDAQ" }
+      - judge: "미국 시장 센티먼트 + 주목 이벤트(FOMC·CPI). 한국 증시 파급 한 줄"
+    reasoning: "지역을 좁힌 시황 조회"
+
+  # === 비즈니스 모델 분석 (business) ===
+  - intent: "NAVER 비즈니스 모델"
+    steps:
+      - tool: grok.search_business
+        params: { symbol: "035420.KS", company_name: "NAVER" }
+      - judge: "사업 세그먼트(서치플랫폼·커머스·핀테크·콘텐츠·클라우드) + 수익 구조 + 경쟁 우위"
+    reasoning: "비즈니스 모델·사업 구조에 초점"
+
+  - intent: "MSFT 는 뭐로 돈 벌어?"
+    steps:
+      - tool: grok.search_business
+        params: { symbol: "MSFT", company_name: "Microsoft" }
+      - judge: "세그먼트별 매출 + 성장 드라이버 + 해자 분석"
+    reasoning: "수익 구조 질문 → business 검색"
+
+  # === 트렌드 테마 검출 (trending) ===
+  - intent: "요즘 뜨는 테마는?"
+    steps:
+      - tool: grok.get_trending_themes
+        params: { region: "kr" }
+      - judge: "주목 테마 목록 + 각 테마의 근거·드라이버"
+    reasoning: "테마 전반 질문. 지역 기본값은 kr"
+
+  - intent: "미국 트렌드 테마"
+    steps:
+      - tool: grok.get_trending_themes
+        params: { region: "us" }
+      - judge: "미국 시장의 주목 테마 + 드라이버"
+    reasoning: "지역 지정 있음"
+
+  # === Grok 미설정 시 폴백 ===
+  - intent: "셀트리온 뉴스 (Grok 미설정)"
+    steps:
+      - check: "grok.is_available() == False"
+      - tool: WebSearch
+        params: { query: "셀트리온 068270 공시 실적 뉴스 2026" }
+      - judge: "WebSearch 결과를 요약. DART 공시·주요 언론을 우선. X 센티먼트는 취득 불가라고 명시"
+    reasoning: "Grok 미설정 → WebSearch 로 대체. 한국 종목은 한국어 쿼리 + 종목코드. 센티먼트는 비대응"
+
+  - intent: "반도체 업계 조사해줘 (Grok 미설정)"
+    steps:
+      - check: "grok.is_available() == False"
+      - tool: WebSearch
+        params: { query: "반도체 업계 동향 HBM 2026" }
+      - tool: WebSearch
+        params: { query: "semiconductor market outlook key players" }
+      - judge: "복수 WebSearch 결과를 통합. Grok 미설정으로 정확도가 떨어진다는 점을 명시"
+    reasoning: "업계 분석 폴백. 한·영 복수 쿼리로 보완"
+
+tool_responsibilities:
+  - grok: API 호출만 (뉴스/센티먼트/업계/시장/비즈니스 검색)
+  - graphrag: 과거 데이터 취득·저장만 (판단 로직 없음)
+  - WebSearch: Grok 미설정 시 폴백 (X 센티먼트 비대응)

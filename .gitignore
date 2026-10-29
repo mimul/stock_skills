@@ -1,0 +1,31 @@
+# Personal/private data (KIK-744: explicit exclusion list)
+# data/ 아래는 기본적으로 개인 데이터이므로 제외한다.
+# 앞으로 추가할 파일은 !/data/<path> 로 명시적으로 화이트리스트한다.
+# 루트 data/ 만 제외한다 (앵커 없는 data/ 는 src/data/, tests/data/ 의 신규 파일까지 숨긴다).
+/data/
+!/data/.gitkeep
+
+# tests/fixtures/sample_*.{csv,json} 는 명시적으로 추적 대상 (KIK-745)
+# 범용 테스트 데이터이므로 개인 PF 와 혼동하지 않도록 명시 화이트리스트.
+!tests/fixtures/sample_portfolio.csv
+!tests/fixtures/sample_cash_balance.json
+
+__pycache__/
+*.pyc
+.venv/
+.env
+.claude/skills/stock-portfolio/data/portfolio.csv
+.claude/worktrees/
+.claude/settings.json
+.claude/settings.local.json
+data/models/
+articles/
+.DS_Store
+.mcp.json
+
+# config/ — 저장소 추적 대상을 명시 (KIK-744)
+# 예전에는 config/ 전체를 제외했지만 scoring/allocation/etf_universe 등
+# 공유 설정은 커밋 대상이다. data 디렉터리와 달리 기밀 정보는 담지 않는다.
+# 기밀 config 를 추가할 때는 config/secrets/ 등으로 분리해 개별 제외한다.
+config/secrets/
+config/*.local.yaml

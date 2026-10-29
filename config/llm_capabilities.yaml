@@ -1,0 +1,54 @@
+# LLM Capabilities — 에이전트가 LLM 선택 시 참조하는 규칙 정의
+# 최종 검증: 2026-04-22
+
+providers:
+  gemini:
+    models:
+      gemini-3.1-pro-preview:
+        strengths: [long_context, structured_reasoning, scenario_analysis]
+        web_search: false
+        cost: medium
+        context_window: 1M
+        best_for: "시나리오 분석, 장문 추론, 로직 정합성 체크"
+      gemini-3-flash-preview:
+        strengths: [speed, cost_efficiency, grounding, thinking]
+        web_search: true  # Google Search Grounding
+        cost: low
+        best_for: "Web 검색+추론 일체 실행, 사실 확인"
+    notes:
+      - "gemini-2.5-pro 는 2026년 10월 폐지 예정"
+
+  gpt:
+    models:
+      gpt-5.4:
+        strengths: [critical_thinking, risk_analysis, devils_advocate]
+        web_search: false
+        reasoning: [none, low, medium, high]
+        cost: medium-high
+        context_window: 1.05M
+        best_for: "리스크 분석, 반론 체크, 깊은 추론(high)"
+    notes:
+      - "reasoning_effort 로 추론 깊이를 4단계 제어"
+
+  grok:
+    models:
+      grok-4.20-0309-reasoning:
+        strengths: [realtime_news, x_sentiment, speed, market_pulse, long_context]
+        web_search: true  # Responses API 경유（tools/grok.py 에서 대응 완료）
+        cost: medium
+        context_window: 2M
+        best_for: "X 센티먼트, 속보 뉴스, 시장 실시간 반응"
+      grok-4-1-fast-reasoning:
+        strengths: [speed, cost_efficiency]
+        web_search: false
+        cost: very_low
+        best_for: "경량 추론 태스크, 비용 중시"
+    notes:
+      - "web_search 는 tools/grok.py 의 search_* 함수에서 대응 완료"
+      - "tools/llm.py 의 Chat Completions 에서는 web_search 미대응"
+
+# 에이전트의 선택 가이드라인（제로샷）:
+# 「최신 사실」→ grok(tools/grok.py) / gemini-flash(web_search=True)
+# 「깊은 추론」→ gpt-5.4 reasoning='high' / gemini-3.1-pro
+# 「속도·비용」→ gemini-flash / grok-fast
+# 「복수 관점」→ gpt(리스크) + gemini(로직) + grok(센티먼트) 병렬

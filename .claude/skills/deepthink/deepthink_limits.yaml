@@ -1,0 +1,70 @@
+# DeepThink 하네스 제약 — 폭주 방지
+# 평가→개선 루프가 무한히 계속되는 것을 막는 안전장치.
+
+limits:
+  max_iterations: 5          # 평가→개선 루프의 최대 횟수
+  max_agent_spawns: 20       # 서브에이전트 기동 최대 수（전 단계 누계）
+  max_llm_calls: 25          # 외부 LLM (GPT/Gemini/Grok) 최대 호출 횟수
+  max_wall_time_minutes: 15  # 벽시계 시간 상한
+
+# 깊이 프리셋 (KIK-690: max_output_chars 추가)
+depth_presets:
+  shallow:
+    max_iterations: 1
+    max_agent_spawns: 6
+    max_llm_calls: 8
+    max_output_chars: 1500   # 각 에이전트 출력의 권장 상한
+    description: "1회의 4-Swarm 리뷰. 경량 보완"
+  medium:
+    max_iterations: 3
+    max_agent_spawns: 12
+    max_llm_calls: 16
+    max_output_chars: 2500
+    description: "2-3회의 평가→개선 루프. 표준적인 심층 분석"
+  deep:
+    max_iterations: 5
+    max_agent_spawns: 20
+    max_llm_calls: 25
+    max_output_chars: 4000
+    description: "수렴할 때까지 루프. 철저한 분석"
+
+actions:
+  on_limit_reached:
+    - "현시점의 중간 결과를 사용자에게 제시"
+    - "속행에는 사용자의 명시적 승인이 필요"
+    - "승인 없이 자동 연장하지 않음"
+
+# KIK-731 / KIK-732: 외부 리서치 툴 상한（비용 보증）
+# 월 예산 $50 안에 안전하게 들어오도록 설계
+tool_limits:
+  gemini_deep_research:
+    max_calls_per_session: 2          # 1세션 최대 2회
+    max_calls_per_month: 10           # 월 10회까지（$2.5×10=$25）
+    monthly_budget_usd: 30
+    estimated_cost_usd:
+      light: 1.5
+      medium: 2.5
+      deep: 5.0                       # KIK-737: 'heavy' → 'deep' 로 통일
+    # KIK-737: depth 연동 wall_time（light/medium=15min, deep=30min）
+    wall_time_by_depth_sec:
+      light: 900
+      medium: 900
+      deep: 1800
+    kill_switch_env: DEEPTHINK_DR_ENABLED  # =off 면 실행 정지
+    dry_run_env: DEEPTHINK_DRY_RUN        # KIK-737: =1 이면 API 불필요 dry_run
+    log_path: data/logs/deepthink_meta.jsonl
+  grok_bulk_x_search:
+    max_calls_per_session: 5
+    max_calls_per_month: 20
+    monthly_budget_usd: 10
+    cost_per_call_usd: 0.5
+    log_path: data/logs/deepthink_meta.jsonl
+  grok_bulk_web_search:
+    max_calls_per_session: 3
+    max_calls_per_month: 15
+    monthly_budget_usd: 7.5
+    cost_per_call_usd: 0.5
+    log_path: data/logs/deepthink_meta.jsonl
+
+# 월 합산 상한（Hard cap）
+monthly_total_budget_usd: 50

@@ -1,0 +1,8 @@
+symbol,shares,cost_price,cost_currency,purchase_date,memo,next_earnings,div_yield,buyback_yield,total_return,beta,role
+005930.KS,10,72000,KRW,2026-01-20,sample fixture,2026-04-30,2.0,0.5,2.5,1.05,장기인컴
+000660.KS,5,180000,KRW,2026-02-10,sample fixture,2026-04-24,0.8,0.0,0.8,1.35,성장
+035420.KS,8,210000,KRW,2025-11-05,sample fixture,2026-05-08,0.6,1.0,1.6,1.10,성장
+105560.KS,12,85000,KRW,2025-09-15,sample fixture,2026-04-25,4.2,1.5,5.7,0.85,장기인컴
+247540.KQ,6,150000,KRW,2026-03-01,sample fixture,2026-05-15,0.0,0.0,0.0,1.60,성장
+069500.KS,20,36000,KRW,2025-06-10,sample fixture,,1.8,0.0,1.8,1.00,헤지
+AAPL,3,180.50,USD,2026-01-15,sample fixture,2026-05-01,0.5,1.2,1.7,1.15,성장

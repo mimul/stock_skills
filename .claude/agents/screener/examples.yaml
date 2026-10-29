@@ -1,0 +1,416 @@
+# Screener Agent — Region·Theme·Preset 정의 & Few-shot Examples
+# 수치는 샘플이다. 에이전트가 사용자의 의도·시장 상황에 맞춰 자율적으로 조정한다.
+
+# ---------------------------------------------------------------------------
+# Region 정의 (지역별 거래소·통화)
+# yfinance EquityQuery 용. 임계값은 에이전트가 자율 판단한다.
+# 코스피만/코스닥만 걸러야 할 때는 exchange 를 KSC(코스피) / KOE(코스닥) 로 구분한다.
+# ---------------------------------------------------------------------------
+regions:
+  kr: { aliases: ["kr", "korea", "한국", "국내", "코스피", "코스닥"], exchanges: ["KSC", "KOE"], currency: "KRW", suffixes: [".KS", ".KQ"] }
+  us: { aliases: ["us", "미국", "미장"], exchanges: ["NMS","NYQ","ASE","NGM","NCM","PCX"], currency: "USD", suffixes: [""] }
+
+# 거래소 코드 보조표 (exchange 필터 단독 지정용)
+exchanges:
+  KSC: "코스피 (KOSPI, 접미사 .KS)"
+  KOE: "코스닥 (KOSDAQ, 접미사 .KQ)"
+
+# ---------------------------------------------------------------------------
+# Theme 정의 (테마별 업종 매핑)
+# 테마 지정 시 해당 industries(yfinance 영문 산업명)로 필터한다.
+# ---------------------------------------------------------------------------
+themes:
+  ai:
+    description: "AI·반도체 (삼성전자·SK하이닉스·한미반도체 등 메모리/장비 포함)"
+    industries:
+      - Semiconductors
+      - Semiconductor Equipment & Materials
+      - Software—Infrastructure
+      - Electronic Components
+
+  ev:
+    description: "EV·차세대 자동차 (현대차·기아·현대모비스 등)"
+    industries:
+      - Auto Manufacturers
+      - Electrical Equipment & Parts
+      - Electronic Components
+
+  secondary-battery:
+    description: "2차전지·배터리 소재 (LG에너지솔루션·삼성SDI·에코프로비엠 등)"
+    industries:
+      - Electrical Equipment & Parts
+      - Electronic Components
+      - Auto Manufacturers
+
+  cloud-saas:
+    description: "클라우드·SaaS·플랫폼 (NAVER·카카오 등 인터넷 포함)"
+    industries:
+      - Software—Infrastructure
+      - Software—Application
+      - Internet Content & Information
+
+  cybersecurity:
+    description: "사이버보안"
+    industries:
+      - Software—Infrastructure
+      - Internet Content & Information
+
+  biotech:
+    description: "바이오테크·신약 (K-바이오: 셀트리온·알테오젠·삼성바이오로직스 등)"
+    industries:
+      - Biotechnology
+      - Drug Manufacturers—Specialty & Generic
+      - Medical Devices
+
+  renewable-energy:
+    description: "재생에너지"
+    industries:
+      - Solar
+      - Utilities—Renewable
+      - Electrical Equipment & Parts
+
+  fintech:
+    description: "핀테크·금융 (KB금융·신한지주 등 지주사 포함)"
+    industries:
+      - Credit Services
+      - Software—Application
+      - Banks—Regional
+
+  defense:
+    description: "방산·항공우주·조선/중공업 (한화에어로스페이스·한국항공우주·현대로템·HD현대중공업 등)"
+    industries:
+      - Aerospace & Defense
+      - Specialty Industrial Machinery  # 국내 조선·중공업 대형주가 이 산업명으로 분류되는 경우가 있음
+
+  healthcare:
+    description: "헬스케어·의료기기 (클래시스·휴젤 등 미용의료 포함)"
+    industries:
+      - Healthcare Plans
+      - Medical Devices
+      - Diagnostics & Research
+
+# ---------------------------------------------------------------------------
+# Mode 정의 (실행 모드)
+# ---------------------------------------------------------------------------
+modes:
+  query:       "EquityQuery 기반 고속 스크리닝. 전 지역 대응 (기본값)"
+  trending:    "Grok API 로 X/Web 상의 화제 종목 검출"
+  pullback:    "기술적 눌림목 판정 파이프라인"
+  alpha:       "4단 통합 스코어 (저평가 + 변화의 질 + 눌림목 + 2축 스코어)"
+  contrarian:  "기술적 과매도 × 펀더멘털 견조"
+  momentum:    "RSI/MACD/거래량/52주 변화율 4축 스코어"
+
+# ---------------------------------------------------------------------------
+# Preset 정의 (전략 설명과 모드. 수치는 examples 의 few-shot 으로 전달)
+# ---------------------------------------------------------------------------
+presets:
+  value:             "전통적 가치투자 (저PER·저PBR)"
+  high-dividend:     "고배당주 (배당수익률 중시)"
+  growth:            { description: "순수 성장주 (고ROE·고성장)", mode: "growth" }
+  growth-value:      "성장 가치주 (성장성 + 저평가)"
+  deep-value:        "딥밸류 (매우 낮은 PER/PBR)"
+  quality:           "퀄리티 밸류 (고ROE + 저평가)"
+  pullback:          { description: "눌림목 매수형 (상승 추세 중 일시 조정)", mode: "pullback" }
+  alpha:             { description: "알파 시그널 (저평가 + 변화의 질 + 눌림목)", mode: "alpha" }
+  trending:          { description: "X 트렌드 종목 (SNS 화제 + 펀더멘털 평가)", mode: "trending" }
+  shareholder-return: "고환원 종목 (배당 + 자사주 매입)"
+  high-growth:       "고성장주 (매출 급성장·PSR 로 버블 방지)"
+  small-cap-growth:  "소형 급성장주 (텐배거 후보)"
+  contrarian:        { description: "역발상 후보 (기술적 과매도 × 펀더멘털 견조)", mode: "contrarian" }
+  momentum:          { description: "모멘텀 (급등·브레이크아웃 검출)", mode: "momentum" }
+  long-term:         "장기투자 적합 (고ROE·배당·안정 성장)"
+  market-darling:    "시장 기대주 (고PER 허용·EPS 급성장)"
+
+# ---------------------------------------------------------------------------
+# 3축 품질 스코어 임계값 (KIK-710)
+# score_quality() 출력을 해석하는 기준. 에이전트가 자율 판단에 사용한다.
+# ---------------------------------------------------------------------------
+quality_thresholds:
+  levels:
+    excellent: 8    # ≥8: 우수 ("높은", "우량"은 이 수준)
+    good: 6         # ≥6: 양호 ("좋은", "탄탄한"은 이 수준)
+    average: 4      # ≥4: 보통
+    # <4 는 "낮음 (주의 필요)"
+  total:
+    premium: 7      # ≥7: 프리미엄 품질
+    solid: 6        # ≥6: 견실
+    moderate: 5     # ≥5: 중간
+    # <5 는 "약함"
+
+# ---------------------------------------------------------------------------
+# 한국 시장 특성 메모 (스크리닝 시 참고)
+# ---------------------------------------------------------------------------
+kr_market_notes:
+  - "코스닥 소형주는 yfinance 재무 필드(ROE·매출성장 등)가 None 인 경우가 많다. 조건 미달로 버리지 말고 '데이터 없음'으로 표기하고 순위 산정에서만 제외한다"
+  - "우선주(예: 005935.KS 삼성전자우)는 보통주와 별도 종목으로 잡힌다. 고배당 스크리닝에 섞여 나오면 보통주 대비 괴리율을 함께 표기한다"
+  - "배당 기준일이 연말에 집중되므로 11~12월 고배당 스크리닝은 배당락 리스크를 주석으로 덧붙인다 (분기배당 확대 종목은 예외)"
+  - "소형주 기준: 시가총액 5천억 원 이하 (config/allocation.yaml small_cap_threshold_krw 와 동일)"
+
+# ---------------------------------------------------------------------------
+# Few-shot Examples
+# ---------------------------------------------------------------------------
+examples:
+  # === 저평가 계열 ===
+  - intent: "저평가된 한국 주식"
+    params: { region: kr, preset: value, max_per: 12, max_pbr: 1.2, min_roe: 0.08 }
+    scoring: "PER(25)+PBR(25)+배당(20)+ROE(15)+성장(15)=100점"
+    reasoning: "한국 시장은 PER/PBR 수준이 낮아 기준을 미국보다 엄격하게 둔다. 시장 환경에 따라 완화 가능"
+
+  - intent: "초저평가 주식"
+    params: { region: kr, preset: deep-value, max_per: 7, max_pbr: 0.5 }
+    scoring: "PER(30)+PBR(30)+배당(20)+ROE(10)+성장(10)=100점"
+    reasoning: "딥밸류. PER/PBR 배점을 높임. 지주사·저PBR 만성 종목(밸류트랩)과 유동성 리스크에 주의"
+
+  # === 배당 계열 ===
+  - intent: "미국 고배당주"
+    params: { region: us, preset: high-dividend, min_dividend_yield: 0.03, min_roe: 0.10 }
+    scoring: "배당(35)+PER(20)+PBR(15)+ROE(15)+성장(15)=100점"
+    reasoning: "배당수익률 배점을 최대화. 미국 배당 기준은 3% 이상이 기준"
+
+  - intent: "코스피 고배당주"
+    params: { region: kr, exchange: KSC, preset: high-dividend, min_dividend_yield: 0.04, min_roe: 0.08 }
+    scoring: "배당(35)+PER(20)+PBR(15)+ROE(15)+성장(15)=100점"
+    reasoning: "코스피만 대상(exchange KSC). 금융지주·통신·우선주가 상위에 오기 쉬우므로 배당 지속성(배당성향)을 함께 본다"
+
+  - intent: "주주환원이 두터운 주식"
+    params: { region: kr, preset: shareholder-return, min_total_return: 0.05 }
+    scoring: "총환원율(30)+PER(20)+PBR(15)+ROE(20)+성장(15)=100점"
+    reasoning: "배당 + 자사주 매입(소각) 총환원율로 평가. 밸류업 공시 기업이 후보가 되기 쉽다"
+
+  # === 성장 계열 ===
+  - intent: "성장주"
+    params: { region: kr, preset: growth, min_revenue_growth: 0.15, min_roe: 0.12 }
+    scoring: "성장(30)+ROE(25)+PER(20)+PBR(15)+배당(10)=100점"
+    reasoning: "성장률과 ROE 배점을 높임. PER/PBR 제약은 완화"
+
+  - intent: "성장과 저평가 균형이 좋은 주식"
+    params: { region: kr, preset: growth-value, min_revenue_growth: 0.10, max_per: 15, min_roe: 0.10 }
+    scoring: "PER(20)+PBR(20)+성장(25)+ROE(20)+배당(15)=100점"
+    reasoning: "성장과 저평가를 균등 평가. GARP(Growth At Reasonable Price) 전략"
+
+  - intent: "폭발적으로 성장하는 주식"
+    params: { region: us, preset: high-growth, min_revenue_growth: 0.20, max_psr: 20 }
+    scoring: "매출성장(40)+ROE(20)+PSR(20)+마진개선(20)=100점"
+    reasoning: "매출성장률 중시. 적자도 허용. PSR 로 과대평가를 필터"
+
+  - intent: "코스닥 소형 성장주"
+    params: { region: kr, exchange: KOE, preset: small-cap-growth, min_revenue_growth: 0.20, max_psr: 10, sort_field: "revenue_growth", sort_asc: false, max_market_cap: 500000000000 }
+    scoring: "매출성장(40)+ROE(20)+PSR(20)+마진개선(20)=100점"
+    quality_filter: { preset_weight: "growth", min_durability: 4 }
+    reasoning: "텐배거 후보. 코스닥(KOE) 한정, 시가총액 5천억 원 이하. 매출성장률 내림차순 정렬(대형주 편중 회피). 재무 데이터 누락 종목은 '데이터 없음' 표기"
+
+  - intent: "미국 소형 성장주"
+    params: { region: us, preset: small-cap-growth, min_revenue_growth: 0.20, max_psr: 20, sort_field: "revenue_growth", sort_asc: false, max_market_cap: 10000000000 }
+    scoring: "매출성장(40)+ROE(20)+PSR(20)+마진개선(20)=100점"
+    quality_filter: { preset_weight: "growth", min_durability: 4 }
+    reasoning: "미국 소형주. 시가총액 $10B 이하. PSR 상한은 한국보다 완화"
+
+  # === 퀄리티 계열 ===
+  - intent: "고품질 종목"
+    params: { region: kr, preset: quality, min_roe: 0.15, min_revenue_growth: 0.05 }
+    scoring: "ROE(35)+PER/PBR(35)+배당(20)+안정성(10)=100점"
+    reasoning: "ROE 와 저평가 배점을 최대화. 안정적인 고수익 기업"
+
+  - intent: "장기로 들고 갈 주식"
+    params: { region: kr, preset: long-term, min_roe: 0.10, min_dividend_yield: 0.02 }
+    scoring: "ROE(25)+PER(20)+PBR(15)+배당(25)+성장(15)=100점"
+    reasoning: "배당과 ROE 를 균형 있게. 5년 이상 바이앤홀드용"
+
+  - intent: "시장 기대주"
+    params: { region: us, preset: market-darling, min_revenue_growth: 0.15, min_roe: 0.12 }
+    scoring: "성장(35)+ROE(25)+PER역배점(20)+마진(20)=100점"
+    reasoning: "고PER 이어도 성장으로 정당화되는 종목. PER 은 높을수록 점수 상승(역배점)"
+
+  # === 특수 mode 계열 ===
+  - intent: "눌림목 종목"
+    mode: pullback
+    params: { region: kr, max_per: 15, min_roe: 0.08 }
+    reasoning: "상승 추세 중 일시 조정을 검출. RSI<40 + 볼린저밴드 하단 접근 + 반등 스코어"
+
+  - intent: "급등 종목"
+    mode: momentum
+    params: { region: kr, min_52wk_change: 0.20 }
+    reasoning: "RSI/MACD/거래량/52주 변화율 4축 스코어"
+
+  - intent: "X 에서 화제인 주식"
+    mode: trending
+    params: { region: kr }
+    reasoning: "Grok API 로 X/Web 상의 화제 종목을 검출하고 펀더멘털 평가를 덧붙임"
+
+  - intent: "역발상 후보"
+    mode: contrarian
+    params: { region: kr, max_per: 12, min_roe: 0.03 }
+    reasoning: "기술적 과매도 × 펀더멘털 견조. RSI<30 + 볼린저밴드 하단 이탈"
+
+  - intent: "좋은 주식 있어?"
+    mode: alpha
+    params: { region: kr }
+    reasoning: "4단 파이프라인 (저평가 + 변화의 질 + 눌림목 + 2축 스코어). 기본 지역은 한국"
+
+  # === 테마 × 프리셋 ===
+  - intent: "AI 관련 저평가주"
+    params: { region: us, preset: value, theme: ai, max_per: 25 }
+    reasoning: "AI 테마는 PER 허용 범위를 넓힌다. 반도체·클라우드 포함"
+
+  - intent: "코스닥 반도체 장비주 찾아줘"
+    params: { region: kr, exchange: KOE, preset: growth-value, theme: ai, max_per: 20 }
+    reasoning: "반도체 장비는 ai 테마(Semiconductor Equipment & Materials). 코스닥(KOE) 한정. 리노공업·원익IPS·HPSP 같은 장비/소재주가 후보"
+
+  - intent: "반도체 성장주"
+    params: { region: us, preset: high-growth, theme: ai }
+    reasoning: "반도체는 ai 테마에 포함. 성장률 중시로 검색"
+
+  - intent: "방산 관련 저평가주"
+    params: { region: kr, preset: value, theme: defense, max_per: 20 }
+    reasoning: "defense 테마. 한화에어로스페이스·한국항공우주·현대로템 등 수출 모멘텀이 있어 PER 허용 범위를 넓힌다"
+
+  - intent: "조선주 중에 괜찮은 거"
+    params: { region: kr, preset: quality, theme: defense, min_roe: 0.10 }
+    reasoning: "조선·중공업은 defense 테마의 Specialty Industrial Machinery 로 잡는다. 수주잔고 회복 국면이라 ROE 기준으로 선별"
+
+  - intent: "2차전지 성장 가치주"
+    params: { region: kr, preset: growth-value, theme: secondary-battery }
+    reasoning: "secondary-battery 테마 × 성장+저평가 균형. 소재주(에코프로비엠 등)는 적자 전환 여부를 확인"
+
+  - intent: "EV 관련 성장 가치주"
+    params: { region: kr, preset: growth-value, theme: ev }
+    reasoning: "EV 테마 × 성장+저평가 균형. 현대차·기아·현대모비스 등 완성차/부품"
+
+  - intent: "바이오주 중 퀄리티 높은 거"
+    params: { region: us, preset: quality, theme: biotech }
+    reasoning: "biotech 테마 × ROE 중시 퀄리티 필터"
+
+  - intent: "K-바이오 성장주"
+    params: { region: kr, preset: growth, theme: biotech, min_revenue_growth: 0.15 }
+    reasoning: "biotech 테마를 한국에 적용. 코스닥 바이오는 적자·재무 누락이 많아 매출성장 기준으로 1차 선별"
+
+  # === 지역별 임계값 ===
+  - intent: "미국 저평가 우량주"
+    params: { region: us, preset: value, max_per: 18, max_pbr: 3.0, min_roe: 0.12 }
+    reasoning: "미국은 PER/PBR 수준이 높아 한국보다 완화된 기준. ROE 기준은 높게"
+
+  - intent: "코스피 대형 가치주"
+    params: { region: kr, exchange: KSC, preset: value, max_per: 10, max_pbr: 1.0, min_market_cap: 1000000000000 }
+    reasoning: "코스피 한정, 시가총액 1조 원 이상. PBR 1배 미만 대형주는 밸류업 수혜 후보"
+
+  - intent: "코스닥 고배당주"
+    params: { region: kr, exchange: KOE, preset: high-dividend, min_dividend_yield: 0.03 }
+    reasoning: "코스닥은 배당주가 적다. 3% 이상으로 낮추되 배당 지속성을 반드시 확인"
+
+  - intent: "한국이랑 미국 둘 다 찾아줘"
+    params: { region: [kr, us], preset: alpha }
+    reasoning: "복수 지역은 오케스트레이터가 지역별 Screener 를 병렬 기동. Screener 자신은 1지역만 담당"
+
+  # === 시장 환경 컨텍스트 ===
+  - intent: "지금 장에서 뭘 사야 해? (F&G 25: 공포)"
+    params: { region: kr, preset: contrarian }
+    reasoning: "공포 국면 → 역발상 전략이 유효. 과매도 종목을 검출"
+
+  - intent: "과열장에서 안전한 주식 (F&G 80: 탐욕)"
+    params: { region: kr, preset: quality }
+    reasoning: "과열장 → 퀄리티 중시. 고ROE·안정 종목으로 방어"
+
+  - intent: "금리 상승 국면에 유리한 주식"
+    params: { region: kr, preset: value, sector: "Financials" }
+    reasoning: "금리 상승 → 금융(은행·보험)이 수혜. 가치 전략과 조합"
+
+  - intent: "원화 약세(환율 상승) 수혜주"
+    params: { region: kr, preset: growth, sector: "Technology" }
+    reasoning: "USD/KRW 상승 → 수출·테크(반도체·자동차) 기업이 수혜. 성장 전략으로 검색"
+
+  - intent: "경기침체에 강한 주식"
+    params: { region: us, preset: quality, sector: "Consumer Defensive" }
+    reasoning: "경기 후퇴 우려 → 경기방어 섹터 × 퀄리티"
+
+  # === 무명주 발굴 (discovery) (KIK-725) ===
+  - intent: "무명 성장주를 발굴해줘"
+    mode: discovery
+    params: { region: us }
+    quality_filter: { preset_weight: "growth", min_durability: 4 }
+    reasoning: |
+      Grok API (search_market) 로 "급성장 중인 소형주", "IPO 후 1~2년 주목주"를 검색.
+      후보 티커를 get_stock_info + get_stock_detail 로 정량 검증.
+      검증 실패(데이터 없음/펀더멘털 불량)는 후보에서 제외.
+      score_quality(preset_weight="growth") 로 3축 스코어 부여. Top3 제시.
+      Grok API 미설정 시 WebSearch 로 폴백.
+
+  - intent: "숨은 종목 알려줘"
+    mode: discovery
+    params: { region: kr }
+    reasoning: "discovery 모드. 한국 시장(특히 코스닥)에서 무명 성장주를 발굴. 재무 누락 종목은 get_stock_detail 로 보완 검증"
+
+  # === ETF 제안 (KIK-725) ===
+  - intent: "추천 ETF 는?"
+    mode: etf
+    params: { purpose: "auto" }
+    reasoning: |
+      config/etf_universe.yaml 을 Read 해서 정번 ETF 리스트를 가져온다.
+      PF 의 부족 팩터(allocation.yaml 대조)에 근거해 보완 ETF 를 제안.
+      get_stock_info + get_stock_detail 로 보수율·AUM·분배율을 취득.
+      purpose: auto → PF 진단에서 자동 판정. dividend/bond/sector/commodity 도 지정 가능.
+
+  - intent: "채권 ETF 어떤 게 좋아?"
+    mode: etf
+    params: { purpose: "bond" }
+    reasoning: "헤지 비중 보강. 국내는 KODEX 국고채3년(114260)·KIWOOM 국고채10년(148070)·KODEX 단기채권(153130), 미국은 AGG/BND/TLT 를 보수율·듀레이션·분배율로 비교"
+
+# 스코어링 배점 원칙
+scoring_principles:
+  - preset 에 따라 스코어 배점이 다르다. 에이전트는 preset 에 맞는 배점을 의식한다
+  - value 계열: PER/PBR 배점이 높다
+  - growth 계열: 성장률/ROE 배점이 높다. PER 제약은 느슨
+  - quality 계열: ROE 배점이 가장 높다
+  - market-darling: PER 은 역배점 (고PER = 고득점)
+  - 지역에 따라 임계값이 다르다 (한국은 PER/PBR 기준이 낮고 배당 기준은 높음, 미국은 그 반대)
+
+tool_responsibilities:
+  - 이상치 가드 (배당수익률 >15%, PBR <0.1 등 정제)
+  - 지역별 임계값 조정 (소형주 시가총액 기준: 한국 5천억 원 / 미국 $1B 등)
+  - EquityQuery 빌드·API 호출 (exchange 는 코스피 KSC / 코스닥 KOE / 미국 NMS·NYQ·ASE·NGM·NCM·PCX)
+
+# ---------------------------------------------------------------------------
+# 3축 품질 스코어 활용 Few-shot (KIK-710)
+# quality_filter: score_quality() 결과에 대한 필터 조건
+# ---------------------------------------------------------------------------
+quality_examples:
+  - intent: "질 좋은 고배당주"
+    params: { region: kr, preset: high-dividend, min_dividend_yield: 0.04, min_roe: 0.08 }
+    scoring: "배당(35)+PER(20)+PBR(15)+ROE(15)+성장(15)=100점"
+    quality_filter: { min_return: 6, min_durability: 6 }
+    reasoning: "고배당 preset 으로 좁힌 뒤 score_quality() 로 환원성≥6 + 지속성≥6 을 필터. 일회성 특별배당으로 보이는 '가짜 고배당'을 배제"
+
+  - intent: "지속성 높은 성장주"
+    params: { region: kr, preset: growth, min_revenue_growth: 0.10, min_roe: 0.12 }
+    scoring: "성장(30)+ROE(25)+PER(20)+PBR(15)+배당(10)=100점"
+    quality_filter: { min_durability: 7, min_growth: 6 }
+    reasoning: "성장 preset 으로 좁힌 뒤 score_quality() 로 지속성≥7 + 성장성≥6. 취약한 고성장을 배제"
+
+  - intent: "균형형 우량주"
+    params: { region: kr, preset: quality, min_roe: 0.12 }
+    scoring: "ROE(35)+PER/PBR(35)+배당(20)+안정성(10)=100점"
+    quality_filter: { min_total: 6, min_all_axes: 4 }
+    reasoning: "quality 프리셋 + 3축 모두 ≥4 이면서 Total≥6. 삼박자가 갖춰진 종목"
+
+  - intent: "탄탄한 고배당 찾아줘"
+    params: { region: kr, preset: high-dividend, min_dividend_yield: 0.045 }
+    scoring: "배당(35)+PER(20)+PBR(15)+ROE(15)+성장(15)=100점"
+    quality_filter: { min_durability: 7, min_return: 6 }
+    reasoning: "지속성≥7 + 환원성≥6 으로 철벽. 배당이 지속 가능한지(배당성향 건전성·재무 견고성)를 중시. 금융지주·통신주가 상위 후보"
+
+  - intent: "환원도 두텁고 성장도 있는 주식"
+    params: { region: kr, preset: shareholder-return, min_total_return: 0.04 }
+    scoring: "총환원율(30)+PER(20)+PBR(15)+ROE(20)+성장(15)=100점"
+    quality_filter: { min_return: 6, min_growth: 5 }
+    reasoning: "환원성≥6 + 성장성≥5. 환원 재원이 고갈되지 않는 지속적 환원 기업을 선별"
+
+  - intent: "미국 우량 성장주"
+    params: { region: us, preset: growth, min_revenue_growth: 0.12, min_roe: 0.15 }
+    scoring: "성장(30)+ROE(25)+PER(20)+PBR(15)+배당(10)=100점"
+    quality_filter: { min_total: 7 }
+    reasoning: "Total≥7 프리미엄 품질만. 미국은 ROE 기준을 높게 설정"
+
+  - intent: "장기로 안심하고 들고 갈 배당주"
+    params: { region: kr, preset: long-term, min_roe: 0.10, min_dividend_yield: 0.03 }
+    scoring: "ROE(25)+PER(20)+PBR(15)+배당(25)+성장(15)=100점"
+    quality_filter: { min_durability: 7, min_return: 5, min_growth: 4 }
+    reasoning: "지속성≥7 필수. 장기 보유에는 재무 견고성과 사업 모델 내성이 가장 중요. 분기배당 전환 종목은 가점"

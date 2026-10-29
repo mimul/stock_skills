@@ -1,0 +1,112 @@
+# Sector/Theme Recommendation Matrix
+# Risk Assessor가 시황 지표로부터 섹터 추천을 생성하기 위한 고정 룰
+# 최종 검증: 2026-04-24 (3 LLM 스웜 + 5자 리뷰 승인). 한국 시장 기준으로 재작성 (2026-10-28)
+# ETF는 한국 섹터 ETF(.KS)를 우선하고, 한국에 대응 ETF가 없는 테마는 미국 ETF로 보완한다.
+
+# 매크로 지표 → 유리/불리 섹터 대응표
+rules:
+  - condition: "금리↑ (TNX 상승 트렌드 4w) AND ISM > 50"
+    favorable: ["은행", "보험", "산업재"]
+    unfavorable: ["유틸리티", "부동산", "성장 테크"]
+    etfs: {favorable: ["091170.KS", "140700.KS", "227550.KS"], unfavorable: ["XLU", "XLRE"]}
+    rationale: "호경기 + 금리 상승은 예대마진 확대로 은행·보험에 순풍. 고PER·장기채 성격 섹터에 역풍"
+
+  - condition: "원유↑ (WTI > $85 AND 상승 트렌드 4w)"
+    favorable: ["에너지화학(정유)"]
+    unfavorable: ["운송(항공·해운)", "유틸리티(한국전력 등 원가 상승)"]
+    etfs: {favorable: ["117460.KS", "XLE"], unfavorable: ["140710.KS"]}
+    rationale: "고유가는 정유·에너지 기업의 수익을 직접 끌어올리고, 연료비 비중이 큰 운송·전력에는 비용 부담"
+
+  - condition: "ISM < 47 AND VIX > 25"
+    favorable: ["헬스케어", "경기방어(생활소비재·통신)", "금"]
+    unfavorable: ["반도체·IT", "자동차", "산업재", "증권"]
+    etfs: {favorable: ["266420.KS", "139280.KS", "227560.KS", "411060.KS"], unfavorable: ["091160.KS", "091180.KS", "227550.KS", "102970.KS"]}
+    rationale: "경기후퇴 국면. 디펜시브 섹터로 자금이 피신. 수출·경기민감 비중이 큰 한국 주력 섹터에 역풍"
+
+  - condition: "금리↓ (TNX 하강 트렌드 4w)"
+    favorable: ["반도체·IT", "성장(바이오·2차전지)", "부동산"]
+    unfavorable: ["은행"]
+    etfs: {favorable: ["091160.KS", "139260.KS", "266420.KS", "305720.KS"], unfavorable: ["091170.KS"]}
+    rationale: "금리 하락은 성장주의 밸류에이션 확대에 기여. 코스닥 성장주에 특히 유리"
+
+  - condition: "지정학 리스크 = 높음 (Step 5에서 검출)"
+    favorable: ["방산·조선", "금"]
+    unfavorable: ["소비", "여행·레저"]
+    etfs: {favorable: ["ITA", "411060.KS", "132030.KS"], unfavorable: []}
+    rationale: "지정학 긴장은 방산 수요와 안전자산 수요를 높인다. 한국 방산(012450.KS, 047810.KS 등)은 수출 수주 테마"
+
+  - condition: "ISM > 55 (강한 확장)"
+    favorable: ["산업재", "철강", "자동차", "중공업"]
+    unfavorable: ["유틸리티", "경기방어"]
+    etfs: {favorable: ["227550.KS", "117680.KS", "091180.KS", "139230.KS"], unfavorable: ["XLU", "139280.KS"]}
+    rationale: "강한 경기 확장에서는 시클리컬 섹터가 수혜. 수출 비중이 큰 한국 경기민감주에 유리"
+
+  - condition: "역전 (YC < 0)"
+    favorable: ["현금", "단기채"]
+    unfavorable: ["은행", "전 리스크 자산"]
+    etfs: {favorable: ["153130.KS", "157450.KS", "SHV"], unfavorable: ["091170.KS"]}
+    rationale: "장단기 금리 역전은 경기후퇴의 선행 지표. 리스크 자산 전반에 경계"
+
+  - condition: "원화 약세 (USD/KRW 4주 연속 상승)"
+    favorable: ["반도체·IT(수출)", "자동차(수출)", "USD 자산"]
+    unfavorable: ["내수(유통·건설)", "항공(달러 부채·연료비)"]
+    etfs: {favorable: ["091160.KS", "091180.KS", "360750.KS"], unfavorable: ["117700.KS", "140710.KS"]}
+    rationale: "원화 약세는 수출 기업의 원화 환산 이익을 늘리고, 달러 부채·수입 원가 비중이 큰 내수·항공에는 부담. 단 외국인 순매도 압력이 동반되면 코스피 전체에 역풍"
+
+# 복수 조건의 중복 처리
+overlap_rules:
+  - "복수 조건에 해당하는 경우 전 해당 테마를 열거한다"
+  - "같은 섹터가 복수 조건에서 추천되는 경우 '강한 추천'으로 표시"
+  - "favorable과 unfavorable이 같은 섹터에서 충돌하는 경우 가장 최근 조건을 우선"
+
+# PF 규모별 적용 범위 (원화 기준)
+scale_rules:
+  small:  # ~7천만원
+    description: "고정 룰만. RS 계산·Grok 검증 없음"
+    apply: ["rules"]  # 이 매트릭스만 적용
+    frequency: "월간"
+    max_trades: 1  # 월 1회까지
+  medium:  # 7천만원~3억원
+    description: "고정 룰 + RS 계산 + Grok 검증"
+    apply: ["rules", "rs", "grok"]
+    frequency: "월간"
+    max_trades: 1  # 분기 1회 (월 환산 약 0.33회지만 월 1회를 상한)
+  large:  # 3억원~
+    description: "풀 기능"
+    apply: ["rules", "rs", "grok", "trend"]
+    frequency: "주간"
+    max_trades: 4  # 월간
+
+# RS(상대강도) 설정 (중규모 이상에서 사용)
+rs_config:
+  benchmark: "069500.KS"  # KODEX 200
+  sector_etfs: ["091160.KS", "091170.KS", "091180.KS", "102970.KS", "117700.KS", "117680.KS", "117460.KS", "266420.KS", "140700.KS", "140710.KS", "139260.KS"]
+  sector_names: {"091160.KS": "반도체", "091170.KS": "은행", "091180.KS": "자동차", "102970.KS": "증권", "117700.KS": "건설", "117680.KS": "철강", "117460.KS": "에너지화학", "266420.KS": "헬스케어", "140700.KS": "보험", "140710.KS": "운송", "139260.KS": "IT"}
+  weights: {rs_ratio_20d: 0.4, rs_ratio_60d: 0.4, volume_change: 0.2}  # rs_ratio = 섹터 ETF 수익률 / KODEX 200 수익률
+  strong_threshold: 1.0  # RS > 1.0 = KODEX 200을 아웃퍼폼
+
+# "하지 않기" 체크 (전 규모 공통)
+do_nothing_checks:
+  - check: "냉각 기간"
+    condition: "이전 매매로부터 규모별 냉각 기간이 경과하지 않음"
+    cooldown: {small: "4주", medium: "2주", large: "1주"}
+    message: "이전 매매로부터 {기간}입니다. 냉각 기간 중입니다"
+
+  - check: "월간 상한"
+    condition: "이번 달 매매 횟수가 상한에 도달"
+    message: "이번 달은 이미 매매했습니다. 상한입니다"
+
+  - check: "범위 내"
+    condition: "PF 밸런스가 목표 범위 내"
+    message: "PF는 범위 내. 배당 + 자사주 매입의 복리가 착실히 PF를 키우고 있습니다"
+
+  - check: "risk-off"
+    condition: "Risk Assessor의 판정이 risk-off"
+    message: "시황이 risk-off 판정입니다. 신규 매수는 보류가 최선입니다"
+
+  - check: "비용 비효율"
+    condition: "PF 규모가 소규모인데 섹터 로테이션 매매"
+    message: "이 PF 규모에서는 섹터 로테이션 매매가 수수료 + 증권거래세로 연간 수익률을 소모합니다"
+
+# do_nothing_checks 오버라이드 (기존에는 시퀀스 안의 키로 있어 YAML 파싱 오류였음 → 최상위 키로 이동)
+do_nothing_override: "사용자가 '그래도 하고 싶다'고 하면 실행한다. 이유를 설명한 뒤 판단은 사용자에게 맡긴다"

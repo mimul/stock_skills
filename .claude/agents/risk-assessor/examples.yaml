@@ -1,0 +1,322 @@
+# Risk Assessor Agent — Few-shot Examples
+# 6개 지표 스코어링 → 합계 → 판정 → PF 밸런스 목표
+# 보조 지표(KOSPI/KOSDAQ/USD/KRW/금/외국인 수급)는 스코어에 넣지 않고 함께 제시한다.
+
+scoring_rules:
+  # 경계값은 하한을 포함 (예: VIX 18은 neutral)
+  vix:
+    risk_on: "< 18"
+    neutral: "18 - 25"
+    risk_off: "> 25"
+  us_10y:
+    risk_on: "3.0% - 4.5%"        # 수정: 3.0-3.5% 구간의 공백 해소
+    neutral: "4.5% - 5.0%"
+    risk_off: "> 5.0% or < 3.0%"  # 3.0% 미만 = 디플레/경기후퇴 우려
+  ism:
+    risk_on: "> 50"
+    neutral: "47 - 50"
+    risk_off: "< 47"
+  fear_greed:
+    risk_on: "> 60"
+    neutral: "40 - 60"
+    risk_off: "< 40"
+  wti:
+    risk_on: "$55 - $85"           # 수정: $55-60 구간의 공백 해소
+    neutral: "$85 - $95"
+    risk_off: "> $95 or < $55"
+  yield_curve:
+    risk_on: "> 0.5%"
+    neutral: "0% - 0.5%"
+    risk_off: "< 0% (역전)"
+
+verdict_rules:
+  risk_on: "합계 >= +3"
+  neutral: "-2 <= 합계 <= +2"
+  risk_off: "합계 <= -3"
+
+# 강제 룰 (스코어와 무관하게 오버라이드)
+force_rules:
+  force_risk_off:
+    - "VIX > 40 (패닉 수준)"
+    - "F&G < 10 (극단적 공포)"
+    - "WTI > $110 (에너지 쇼크)"
+    - "위 중 하나라도 해당 → 스코어와 무관하게 강제 risk-off"
+  note: "강제 risk-off 중의 역추세 매수는 VIX가 고점에서 20% 이상 하락한 뒤에 검토"
+
+contrarian_rules:
+  overbought: "F&G > 80 AND VIX < 15 → 성장주 익절 검토"
+  oversold: "F&G < 25 AND VIX > 30 → 눌림목 매수 호기"
+  priority: "역추세 시그널은 통상 판정을 수정한다. risk-on 판정이라도 과매수면 현금 비중 확대"
+
+# 보조 지표 (한국 시장 관점. 스코어 외)
+supplementary_rules:
+  usd_krw:
+    weak_krw: "4주 연속 상승(원화 약세) → 외국인 자금 이탈·수입 물가 상승. 국내 성장주에 역풍, 수출주·USD 자산에는 완충"
+    strong_krw: "4주 연속 하락(원화 강세) → 외국인 유입 기대. USD 자산의 원화 환산 평가액은 감소"
+  kospi:
+    note: "KOSPI가 SMA200 아래 + 외국인 순매도 연속 → 국내 비중 확대는 신중. 스코어 판정이 risk-on이어도 국내 주식은 1단계 신중하게"
+  foreign_flow:
+    note: "외국인 순매도 5일 이상 연속은 경계 신호. 반도체 대형주(005930.KS, 000660.KS)의 수급 영향이 특히 크다"
+
+# PF 타깃 정의는 config/allocation.yaml을 SSoT로 한다 (KIK-685)
+# role_targets / concentration / currency / geography는 전부 allocation.yaml에서 Read하여 취득
+pf_targets_source: "config/allocation.yaml"
+
+examples:
+  # === 전형적인 risk-on ===
+  - intent: "리스크 판정해줘"
+    input: {vix: 15, tnx: 4.0, ism: 52, fg: 72, wti: 78, yc: 0.8}
+    scores: {vix: +1, tnx: +1, ism: +1, fg: +1, wti: +1, yc: +1}
+    total: +6
+    verdict: risk-on
+    contrarian: 없음
+    pf_target: {income: "45-55%", growth: "25-30%", hedge: "5%", cash: "15-20%"}
+    reasoning: "전 지표가 risk-on. 경기 확장 + 저VIX + 적정 금리. 성장 비율을 높게"
+
+  # === 전형적인 neutral ===
+  - intent: "시황 체크"
+    input: {vix: 21, tnx: 4.7, ism: 49, fg: 50, wti: 90, yc: 0.2}
+    scores: {vix: 0, tnx: 0, ism: 0, fg: 0, wti: 0, yc: 0}
+    total: 0
+    verdict: neutral
+    contrarian: 없음
+    pf_target: {income: "45-55%", growth: "25-30%", hedge: "5%", cash: "15-20%"}
+    reasoning: "전 지표가 neutral. 방향감 없음. 장기인컴 중심으로 관망"
+
+  # === 전형적인 risk-off ===
+  - intent: "폭락하고 있어"
+    input: {vix: 31, tnx: 5.2, ism: 45, fg: 28, wti: 101, yc: -0.4}
+    scores: {vix: -1, tnx: -1, ism: -1, fg: -1, wti: -1, yc: -1}
+    total: -6
+    verdict: risk-off
+    contrarian: 없음
+    pf_target: {income: "50-55%", growth: "10-20%", hedge: "5-10%", cash: "25-35%"}
+    reasoning: "전 지표가 risk-off. 경기후퇴 + 고금리 + 고유가. 성장을 대폭 축소, 현금을 두껍게"
+
+  # === risk-on 하한 (현재 시황에 가까움) ===
+  - intent: "지금 시황은 어때?"
+    input: {vix: 19.3, tnx: 4.29, ism: 52.7, fg: 70, wti: 93, yc: 0.49}
+    scores: {vix: 0, tnx: +1, ism: +1, fg: +1, wti: 0, yc: 0}
+    total: +3
+    verdict: risk-on (하한)
+    contrarian: 없음
+    pf_target: {income: "45-55%", growth: "25-30%", hedge: "5%", cash: "15-20%"}
+    note: "F&G 70은 Greed권으로 급반전 리스크. 원유 $95 초과 시 neutral로 전락. 풀 risk-on은 위험"
+    reasoning: "아슬아슬한 risk-on. 경제 지표는 견조하나 고유가 + VIX 상승 경향으로 불안정"
+
+  # === risk-off + 과매도 (역추세 호기) ===
+  - intent: "지금 살 때야?"
+    input: {vix: 35, tnx: 4.8, ism: 46, fg: 18, wti: 72, yc: -0.2}
+    scores: {vix: -1, tnx: 0, ism: -1, fg: -1, wti: +1, yc: -1}
+    total: -3
+    verdict: risk-off
+    contrarian: "F&G 18 + VIX 35 = 과매도. 눌림목 매수 호기"
+    action: "현금 25% 중 10%를 사용하여 RSI<35의 장기인컴 우량 종목(105560.KS, 017670.KS 등)을 추가 매수"
+    pf_target: {income: "50-55%", growth: "10-20%", hedge: "5-10%", cash: "25-35%"}
+    reasoning: "risk-off지만 극단적 공포는 역추세 시그널. 패닉 시 장기인컴 우량주를 줍는다"
+
+  # === risk-on + 과매수 (익절 시그널) ===
+  - intent: "익절해야 해?"
+    input: {vix: 12, tnx: 3.8, ism: 55, fg: 85, wti: 75, yc: 1.2}
+    scores: {vix: +1, tnx: +1, ism: +1, fg: +1, wti: +1, yc: +1}
+    total: +6
+    verdict: risk-on
+    contrarian: "F&G 85 + VIX 12 = 과매수. 성장주 익절 검토"
+    action: "성장 역할에서 RSI>70인 종목을 일부 익절. 현금을 15%→20%로 끌어올림"
+    pf_target: {income: 45%, growth: 30%, hedge: 5%, cash: 20%}
+    reasoning: "수치상은 risk-on이지만 센티먼트가 극단적으로 낙관. 반락에 대비해 성장주를 트림"
+
+  # === 지정학 쇼크 (강제 risk-off) ===
+  - intent: "전쟁 시작됐어"
+    input: {vix: 40, tnx: 4.0, ism: 51, fg: 15, wti: 110, yc: 0.3}
+    scores: {vix: -1, tnx: +1, ism: +1, fg: -1, wti: -1, yc: 0}
+    total: -1
+    verdict: "스코어는 neutral이지만 VIX 40 + F&G 15 + WTI 110의 극단값 → 강제 risk-off"
+    contrarian: "F&G 15 = 극단적 공포. 단 지정학 쇼크 시에는 역추세 매수를 서두르지 않는다"
+    action: "성장주를 즉시 트림. 현금 25% 이상으로. 원화 급락 동반 시 USD 자산은 환차익으로 일부 완충됨을 확인. 진정된 뒤 눌림목 검토"
+    pf_target: {income: "50-55%", growth: "10-20%", hedge: "5-10%", cash: "25-35%"}
+    reasoning: "지정학 쇼크 시에는 스코어와 무관하게 강제 risk-off. VIX 40 초과는 즉시 방어"
+
+  # =================================================================
+  # 역사적 패턴 (Gemini 3.1 Pro + Grok 조사에 기반)
+  # =================================================================
+
+  # === 스태그플레이션 (현대판. 인플레 + 경기 감속의 동시 진행) ===
+  - intent: "인플레는 안 멈추는데 경기는 나빠"
+    input: {vix: 28, tnx: 5.0, ism: 46, fg: 25, wti: 98, yc: -0.5}
+    scores: {vix: -1, tnx: -1, ism: -1, fg: -1, wti: -1, yc: -1}
+    total: -6
+    verdict: risk-off (스태그플레이션)
+    action: "주식·채권을 대폭 축소. 금(411060.KS ACE KRX금현물, 132030.KS KODEX 골드선물(H))과 현금을 확충. 장기인컴형이라도 고Beta 종목은 축소"
+    pf_target: {income: 50%, growth: 5%, hedge: 15%, cash: 30%}
+    reasoning: "물가 상승 + 불황의 병발. 중앙은행이 인플레 억제를 우선해 금리를 내리지 못하고, 주식과 채권이 동시에 하락하는 최악의 국면. 2022년 후반의 환경과 유사"
+
+  # === 금융위기 (리먼 쇼크 2008형) ===
+  - intent: "은행이 무너질 것 같아"
+    input: {vix: 80, tnx: 1.5, ism: 35, fg: 3, wti: 40, yc: 2.0}
+    scores: {vix: -1, tnx: -1, ism: -1, fg: -1, wti: -1, yc: +1}
+    total: -4
+    verdict: "강제 risk-off (VIX 80 초과로 강제 발동)"
+    contrarian: "F&G 3은 극단적 공포. 단 신용 수축 시에는 바닥이 보일 때까지 역추세 매수를 하지 않는다. VIX가 고점에서 20% 하락할 때까지 기다린다"
+    action: "전 리스크 자산을 매도하고 단기 국채(153130.KS KODEX 단기채권)와 현금으로 완전 대피. 금융 섹터(105560.KS, 055550.KS 등)는 즉시 매도. 유동성 확보가 최우선"
+    pf_target: {income: 30%, growth: 0%, hedge: 15%, cash: 55%}
+    reasoning: "리먼 때 VIX는 80 초과, 코로나 때는 82. 신용 수축에서는 우량 종목도 환금 매도된다. 초동은 전량 매도, 진정된 뒤 되사기"
+
+  # === 통화위기 (1997년 아시아 통화위기형 · 원화 급락) ===
+  - intent: "원화가 폭락하고 있어"
+    input: {vix: 32, tnx: 5.2, ism: 49, fg: 20, wti: 70, yc: 0.2}
+    scores: {vix: -1, tnx: -1, ism: 0, fg: -1, wti: +1, yc: 0}
+    total: -2
+    verdict: neutral (단 국내 자산은 축소 검토)
+    action: "USD/KRW 급등 국면. 외국인 순매도가 집중되는 코스닥 성장주(247540.KQ, 196170.KQ 등)를 단계적으로 축소. 전량 매도가 아닌 절반 정도로. USD 자산과 수출 대형주(005930.KS, 005380.KS)는 유지"
+    pf_target: {income: 55%, growth: 20%, hedge: 10%, cash: 15%}
+    reasoning: "미국 고금리가 신흥국에서의 자금 역류를 유발. 한국은 외환보유고·경상수지가 1997년과 다르지만 외국인 수급 이탈은 코스피·코스닥에 직격. 종목별 영향 차이가 커 일률 대피는 과잉 반응"
+    note: "PF의 USD 비중이 환차익 완충이 된다. KRW 비중이 allocation.yaml의 floor를 밑돌지 않도록 주의"
+
+  # === 버블 붕괴 (2000년 IT 버블 붕괴형) ===
+  - intent: "테크주가 급락하고 있어"
+    input: {vix: 35, tnx: 3.5, ism: 43, fg: 15, wti: 60, yc: -0.2}
+    scores: {vix: -1, tnx: 0, ism: -1, fg: -1, wti: +1, yc: -1}
+    total: -3
+    verdict: risk-off (버블 붕괴)
+    action: "성장주(000660.KS/247540.KQ/196170.KQ/NVDA)를 대폭 축소. 디펜시브 + 고배당(105560.KS, 017670.KS, 279530.KS)에 집중"
+    pf_target: {income: 60%, growth: 5%, hedge: 10%, cash: 25%}
+    reasoning: "과대평가의 멜트다운. ISM 악화로 실물 경제도 냉각되고, 고밸류에이션 종목부터 붕괴. PF의 AI·반도체 테마 집중(30% 초과)이 직격당한다"
+    note: "커버드콜 ETF(JEPI, 458730.KS 등)도 성장주와 같은 방향으로 하락한다. 인컴이 아닌 성장 취급"
+
+  # === 정책 전환 (1994년 FRB 전격 금리인상형) ===
+  - intent: "갑자기 금리 인상됐어"
+    input: {vix: 20, tnx: 5.0, ism: 56, fg: 45, wti: 80, yc: 0.5}
+    scores: {vix: 0, tnx: -1, ism: +1, fg: 0, wti: +1, yc: +1}
+    total: +2
+    verdict: neutral (단 금리 급등에 주의)
+    action: "장기채의 듀레이션을 단기화(148070.KS → 114260.KS/153130.KS). 성장주 중 PER이 높은 종목을 트림. 가치주로 이동"
+    pf_target: {income: 55%, growth: 20%, hedge: 5%, cash: 20%}
+    reasoning: "호경기 하의 급격한 금융 긴축. 1994년 금리인상 시 VIX는 10-20대 전반. 경기 견조로 VIX는 낮지만 금리 급등이 밸류에이션을 압축"
+    note: "196170.KQ(PER 높음)나 NVDA가 영향 큼. 은행주(105560.KS, 055550.KS)는 금리 상승 수혜 쪽"
+
+  # === 코로나 쇼크 (2020년 3월형 · 외생 쇼크) ===
+  - intent: "팬데믹 발생"
+    input: {vix: 82, tnx: 0.5, ism: 42, fg: 3, wti: 30, yc: 0.8}
+    scores: {vix: -1, tnx: -1, ism: -1, fg: -1, wti: -1, yc: +1}
+    total: -4
+    verdict: "강제 risk-off (VIX 82로 강제 발동)"
+    contrarian: "F&G 3 + VIX 82 = 역사적 과매도. 단 바닥은 불명. VIX가 고점에서 20% 하락한 뒤 단계적으로 줍는다"
+    action: "초동은 전 리스크 자산을 축소 (우량 종목 포함). 유동성 위기에서는 환금 매도가 우량주에도 미친다. VIX 하락 후 단계적으로 되사기"
+    pf_target: {income: 35%, growth: 0%, hedge: 10%, cash: 55%}
+    reasoning: "코로나 때 VIX 82. 외생 쇼크는 회복도 빠르지만(V자), 초동에서는 우량 종목도 무차별 환금 매도되었다. 초기 홀드는 위험. 바닥 확인 후 되산다"
+
+  # === risk-on이지만 지정학 트리거 접근 (2026년 4월형) ===
+  - intent: "리스크 판정해줘 (지정학 리스크 고려)"
+    input: {vix: 19, tnx: 4.3, ism: 53, fg: 70, wti: 93, yc: 0.5}
+    scores: {vix: 0, tnx: +1, ism: +1, fg: +1, wti: 0, yc: 0}
+    total: +3
+    verdict: risk-on (하한)
+    geopolitical:
+      situation: "이란 휴전 협상 정체. 호르무즈 해협에서 선박 나포 발생. 봉쇄 지속 시 원유 $130+ 리스크"
+      threshold_proximity: "⚠️ 원유 $93 → $95 임계값까지 $2. 뉴스 하나로 neutral 전락"
+      vix_proximity: "VIX 19 → 40 임계값까지 21pt. 아직 거리 있음"
+    adjusted_verdict: "실질 neutral. 지정학 리스크가 임계값에 극히 가깝다"
+    pattern_match: "risk-on 하한 패턴(예 4)에 가깝지만, 지정학 요인으로 1단계 신중화"
+    action: "풀 risk-on으로의 조정은 보류. 장기인컴 보강(105560.KS 등)에 한정. 신규 성장주 추가는 자제"
+    pf_target: {income: "45-55%", growth: "25-30%", hedge: "5%", cash: "15-20%"}
+    reasoning: "정량 스코어는 risk-on이지만 원유 $95까지 $2로 지정학 트리거가 극히 가깝다. 풀 risk-on은 위험. neutral 목표로 행동한다"
+
+  # === 골디락스 장세 (2017년형 · 저VIX 장기 안정) ===
+  - intent: "아무 일도 없는 안정 장세"
+    input: {vix: 11, tnx: 3.5, ism: 58, fg: 75, wti: 65, yc: 1.0}
+    scores: {vix: +1, tnx: +1, ism: +1, fg: +1, wti: +1, yc: +1}
+    total: +6
+    verdict: risk-on
+    contrarian: "VIX 11은 역사적 저수준. 저VIX가 장기화되면 급등 리스크가 축적"
+    action: "risk-on이지만 과신하지 않는다. 성장은 35%를 상한으로. VIX 급등에 대비해 헤지(금 ETF 등)를 얇게 보유"
+    pf_target: {income: "45-55%", growth: "25-30%", hedge: "5%", cash: "15-20%"}
+    reasoning: "골디락스(적온 장세)는 편안하지만 영속하지 않는다. 2017년 저VIX 뒤 2018년 2월의 VIX 쇼크가 왔다"
+
+# NOTE: trend_rules / trend_examples는 기존에 examples 시퀀스 안의 키로 있어 YAML 파싱 오류였음 → 최상위 키로 이동
+# =================================================================
+# 트렌드 시그널 (방향을 앞서 읽는다)
+# =================================================================
+#
+# 단일 시점의 스코어뿐 아니라 지표의 "방향"을 본다.
+# 2개의 시간축으로 트렌드를 판정한다:
+#
+# ■ 단기 트렌드 (4주): 최근의 방향 변화를 검출. 선행 시그널
+# ■ 중기 트렌드 (12주): 매크로 사이클의 전환점을 검출. 구조 변화
+#
+# 판정 방법:
+#   각 지표의 변화를 계산:
+#   - 악화 방향으로 3주 이상 연속 → trend_warning (-1)
+#   - 개선 방향으로 3주 이상 연속 → trend_positive (+1)
+#   - 횡보 or 방향 불명 → trend_neutral (0)
+#
+# 단기 트렌드 스코어가 -3 이하 → "risk-off로 향하고 있다" 선행 경고
+# 중기 트렌드 스코어가 -3 이하 → "매크로 환경이 악화" 구조적 경고
+# 단기와 중기가 같은 방향 → 확신도 높음
+# 단기와 중기가 반대 방향 → 전환점 가능성. 주의 깊게 관찰
+
+trend_rules:
+  vix:
+    worsening: "3주 이상 연속 상승 (예: 15→17→19→21)"
+    improving: "3주 이상 연속 하락"
+  tnx:
+    worsening: "4.5%를 향해 상승 중"
+    improving: "4.0%를 향해 하락 중"
+  ism:
+    worsening: "50 하회를 향해 하락 중"
+    improving: "50 상회를 향해 상승 중"
+  fg:
+    worsening: "40을 향해 하락 중"
+    improving: "60을 향해 상승 중"
+  wti:
+    worsening: "$95를 향해 상승 중"
+    improving: "$85를 향해 하락 중"
+  yc:
+    worsening: "0%를 향해 플랫화 (역전 접근)"
+    improving: "스티프화 (금리차 확대)"
+  usd_krw:
+    worsening: "4주 연속 상승 (원화 약세. 외국인 이탈 압력)"
+    improving: "4주 연속 하락 (원화 강세. 외국인 유입 기대)"
+
+trend_examples:
+  # === risk-off로 향하고 있는 선행 경고 ===
+  - intent: "요즘 슬슬 나빠지고 있지 않아?"
+    current: {vix: 21, tnx: 4.4, ism: 50, fg: 48, wti: 91, yc: 0.3}
+    current_verdict: neutral (스코어 0)
+    trend_4w: {vix: "15→17→19→21 ↑↑↑", tnx: "4.1→4.2→4.3→4.4 ↑↑↑", ism: "53→52→51→50 ↓↓↓", fg: "65→58→52→48 ↓↓↓", wti: "78→83→87→91 ↑↑↑", yc: "0.6→0.5→0.4→0.3 ↓↓↓"}
+    trend_score: -6
+    warning: "전 지표가 risk-off 방향으로 악화 중. 현시점은 neutral이지만 1-2주 이내 risk-off 전락 가능성 큼"
+    action: "선행하여 성장주를 축소하기 시작. 현금을 15%→20%로 끌어올림. 신규 매수를 정지"
+    reasoning: "점으로는 neutral이지만 선으로는 risk-off로 향하고 있다. 기다렸다 움직이면 늦다"
+
+  # === risk-on으로 향하고 있는 호전 시그널 ===
+  - intent: "요즘 좋아지고 있어?"
+    current: {vix: 22, tnx: 4.3, ism: 49, fg: 42, wti: 88, yc: 0.1}
+    current_verdict: neutral (스코어 -1)
+    trend_4w: {vix: "30→27→24→22 ↓↓↓", tnx: "4.8→4.6→4.4→4.3 ↓↓↓", ism: "46→47→48→49 ↑↑↑", fg: "22→30→35→42 ↑↑↑", wti: "98→95→92→88 ↓↓↓", yc: "-0.3→-0.1→0.0→0.1 ↑↑↑"}
+    trend_score: +6
+    signal: "전 지표가 risk-on 방향으로 개선 중. 현시점은 neutral이지만 회복 트렌드가 명확"
+    action: "눌림목 매수 준비. RSI<35의 장기인컴 우량 종목을 워치리스트에 추가. 현금 투입 준비"
+    reasoning: "점으로는 아직 neutral이지만 선으로는 risk-on으로 향하고 있다. 공포가 남아 있는 동안 선취한다"
+
+  # === 현재 PF에 적용한 예 ===
+  - intent: "지금 트렌드는?"
+    current: {vix: 19.3, tnx: 4.29, ism: 52.7, fg: 70, wti: 93, yc: 0.49}
+    current_verdict: "risk-on (+3, 하한)"
+    trend_4w: {vix: "17.5→18.9→19.5→19.3 ↑↑→", fg: "25→45→65→70 ↑↑↑↑", wti: "83→87→90→93 ↑↑↑", usd_krw: "1,380→1,395→1,410→1,420 ↑↑↑"}
+    trend_mixed: true
+    warning: "F&G가 4주 만에 25→70으로 급등 (Extreme Fear→Greed). 급반전 리스크. 원유도 상승 트렌드 지속으로 $95 접근. USD/KRW 상승(원화 약세)으로 외국인 수급 이탈 압력"
+    positive: "ISM은 확장권 유지. 금리는 안정. VIX는 횡보화"
+    action: "risk-on이지만 트렌드는 혼재. F&G 급등은 버블적 낙관의 징후. 신규 성장주 추가는 자제, 장기인컴 보강(105560.KS 등)에 한정"
+    pf_specific: "000660.KS RSI 76은 트렌드상으로도 과열. 035420.KS/035720.KS는 데드크로스 지속으로 회복 트렌드에 올라타지 못함"
+
+individual_stock_signals:
+  overbought:
+    condition: "RSI > 70 AND volume > 1.5x 20일 평균"
+    action: "익절 검토 (과거 lesson: RSI 79에서 익절 놓침 → 평가익 소멸)"
+  oversold:
+    condition: "RSI < 35 AND 펀더멘털 건전 (이익 성장 플러스)"
+    action: "눌림목 매수 후보 (장기인컴 우량주 RSI 36 사례)"
+  recovery:
+    condition: "ATH 대비 -30% 초과 하락 AND ROE>20% AND 카탈리스트 발생"
+    action: "리커버리주 진입 후보 (과거 lesson 참조)"

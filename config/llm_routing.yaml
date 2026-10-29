@@ -1,0 +1,55 @@
+# Reviewer LLM Routing — 동적 LLM 선택 규칙
+# 각 리뷰어에 서로 다른 LLM 을 할당해 다각적인 관점을 확보한다.
+# API 키 미설정 시에는 전부 Claude（Claude Code 자체）로 실행한다.
+
+reviewers:
+  risk_reviewer:
+    role: "리스크·누락·반론"
+    provider: gpt
+    model: gpt-5.5
+  logic_reviewer:
+    role: "모순·논리 정합성·lesson 과의 정합"
+    provider: gemini
+    model: gemini-3.1-pro-preview
+  data_reviewer:
+    role: "수치의 정확성·계산 실수·전제의 타당성"
+    provider: claude
+    model: claude-sonnet-4-6
+  concluder:
+    role: "각 리뷰어의 결과를 통합해 최종 판단"
+    provider: claude
+    model: claude-sonnet-4-6
+
+# API 키 미설정 시 폴백
+fallback: claude
+
+# 선택 가능한 LLM 목록
+available_models:
+  claude:
+    api_key_env: null  # Claude Code 자체로 실행
+    models:
+      - model: claude-opus-4-6
+        cost: { input_per_m: 5.00, output_per_m: 25.00 }
+      - model: claude-sonnet-4-6
+        cost: { input_per_m: 3.00, output_per_m: 15.00 }
+      - model: claude-haiku-4-5
+        cost: { input_per_m: 1.00, output_per_m: 5.00 }
+  gemini:
+    api_key_env: GEMINI_API_KEY
+    models:
+      - model: gemini-3.1-pro-preview
+        cost: { input_per_m: 2.00, output_per_m: 12.00 }
+      - model: gemini-2.5-pro
+        cost: { input_per_m: 1.25, output_per_m: 10.00 }
+  gpt:
+    api_key_env: OPENAI_API_KEY
+    models:
+      - model: gpt-5.5
+        cost: { input_per_m: 2.50, output_per_m: 15.00 }
+  grok:
+    api_key_env: XAI_API_KEY
+    models:
+      - model: grok-4.20-0309-reasoning
+        cost: { input_per_m: 2.00, output_per_m: 6.00 }
+      - model: grok-4-1-fast-reasoning
+        cost: { input_per_m: 0.20, output_per_m: 0.50 }

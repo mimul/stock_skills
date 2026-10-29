@@ -1,0 +1,243 @@
+# Strategist Agent — Few-shot Examples
+# 수치는 샘플. 에이전트가 사용자 의도·PF 상황에 맞춰 자율적으로 조정한다.
+# Strategist는 다른 에이전트의 결과를 받아 추천을 낸다.
+# what-if는 code interpreter로 계산한다.
+# 세금·비용 전제: 국내주식은 증권거래세 약 0.15% (소액주주 양도세 비과세),
+#   미국주식은 양도소득세 22% (연 250만원 기본공제). 매매 단위는 한국·미국 모두 1주.
+
+examples:
+  # === 교체 제안 (swap) ===
+  - intent: "이 종목 교체하고 싶어"
+    input: "Health Checker/Analyst/Researcher의 결과"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "교체 제안" }
+      - read: "portfolio.csv"
+      - read: "config/allocation.yaml"
+        note: "타깃 정의를 취득 (KIK-685 SSoT)"
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "<매도 후보>" }
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "<매수 후보>" }
+      - code: "매도대금 - 세금·거래비용 = 실수령액. 매수 후 섹터/통화/지역 비율 Before/After/Target을 계산. warn/limit 초과를 green/yellow/red로 판정"
+      - recommend: "통화 배분·섹터 분산·비용·lesson을 고려하여 추천. 타깃 이탈이 있으면 경고"
+    reasoning: "교체 → what-if에 Target 열 추가. 타깃 범위 안에 들어가는지 검증"
+
+  - intent: "035420.KS 팔고 AAPL로 갈아타고 싶어"
+    input: "Health Checker: 035420.KS는 EARLY WARNING / Analyst: AAPL 분석 결과"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "035420.KS AAPL 교체" }
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "035420.KS" }
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "AAPL" }
+      - code: |
+          매도대금 = 현재가 × 주수
+          거래비용 = 매도대금 × 0.0015 (증권거래세, 소액주주 양도세 없음)
+          실수령액 = 매도대금 - 거래비용
+          AAPL 매수 주수 = floor(실수령액 / (AAPL 주가 × USD/KRW 환율)) (1주 단위)
+          Before/After: 섹터 비율, 통화 비율(USD 증가), 지역 비율(미국 증가)
+      - recommend: "3패턴 비교: 매도+매수 / 매도만 / 아무것도 하지 않음. USD 비율 60% 제약 체크"
+    reasoning: "구체적인 종목 페어. 원화→달러 환전이 발생하므로 통화 비율과 환율 리스크를 명시"
+
+  # === 신규 매수 판단 (buy) ===
+  - intent: "이 주식 사야 해?"
+    input: "Analyst/Researcher의 분석 결과"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "매수 판단" }
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "<후보 종목>" }
+      - code: "추가 후 섹터/통화/지역/규모 비율 Before/After를 계산"
+      - recommend: "분산 효과·비용·lesson을 고려하여 추천"
+    reasoning: "매수 → PF 전체에 미치는 영향을 what-if로 검증"
+
+  - intent: "000660.KS 추가하면 어떻게 돼?"
+    input: "Analyst: 000660.KS는 저평가도 60점 / Researcher: AI 메모리 수요 견조"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "000660.KS 추가" }
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "000660.KS" }
+      - code: |
+          매수비용 = 주가 × 주수
+          Before/After: 반도체(Technology) 섹터 비율, KRW 비율, 대형주 비율
+          PF 가중평균 Beta의 변화
+          1종목 집중도 (005930.KS 보유 시 반도체 2종목 합산 비중)
+      - recommend: "섹터 집중도(allocation.yaml sector warn/limit) 체크. 단일 종목 15% limit 체크"
+    reasoning: "구체적인 종목. 반도체 집중 리스크를 검증"
+
+  # === "아무것도 하지 않음" 수치 비교 ===
+  - intent: "교체 vs 아무것도 하지 않음 기대값 비교"
+    input: "Health Checker: 매도 후보 평가익 +15% / Analyst: 매수 후보 저평가도 70점"
+    steps:
+      - code: |
+          패턴 A: 아무것도 하지 않음
+            기대수익률 = 현재 PF의 가중평균 기대수익률 (예: +8%/년)
+            비용 = ₩0
+            리스크 = 현상 유지
+
+          패턴 B: 교체 실행
+            매도대금 = ₩X,XXX,XXX
+            세금·거래비용 = ₩XX,XXX (국내: 증권거래세 0.15% / 미국: 양도차익 × 22%)
+            실수령액 = ₩X,XXX,XXX
+            매수 후 기대수익률 = +10%/년 (가정)
+            비용 = 세금 + 수수료 + 환전 비용
+            1년 후 기대 차액 = (B 기대수익률 - A 기대수익률) × 투자액 - 비용
+
+          패턴 C: 일부 매도 (50%)
+            비용이 절반. 리스크도 분산
+      - recommend: "3패턴의 기대값을 비교하고, 비용 공제 후 B가 우위인 경우에만 추천"
+    reasoning: "아무것도 하지 않음 선택지를 항상 포함. 비용 공제 후 실질 수익률로 비교"
+
+  # === 매도 판단 (sell) ===
+  - intent: "이 주식 팔아야 해?"
+    input: "Health Checker의 진단 결과"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "매도 판단" }
+      - tool: notes.check_exit_rule
+        params: { symbol: "<대상 종목>", pnl_pct: "<현재 손익률 %>" }
+        note: "exit-rule 노트의 stop_loss/take_profit 임계값과 대조. 저촉 시 룰을 따른다"
+      - read: "portfolio.csv"
+      - code: |
+          매도대금 = 현재가 × 주수
+          세금 = 국내: 매도대금 × 0.0015 / 미국: max(0, (현재가 - 취득단가) × 주수 × 환율 - 2,500,000) × 0.22
+          실수령액 = 매도대금 - 세금 - 수수료
+          Before/After: 섹터/통화/지역 비율
+      - recommend: "매도/홀드/일부 매도 3패턴을 비교"
+    reasoning: "매도 → 먼저 exit-rule 확인. 룰 저촉이면 룰 우선. 없으면 비용 포함 3패턴 비교"
+
+  - intent: "손절해야 해?"
+    input: "Health Checker: 평가손 -15%, RSI 35"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "손절 판단" }
+      - tool: notes.check_exit_rule
+        params: { symbol: "<대상 종목>", pnl_pct: -15.0 }
+        note: "stop_loss 임계값에 저촉하는지 확인. 저촉 → 룰대로 손절을 권고"
+      - read: "portfolio.csv"
+      - code: "손절 시 실현손실액을 계산. 미국주식이면 다른 해외주식 양도차익과 손익통산 가능성 확인"
+      - recommend: "손절 / 물타기 / 홀드 3패턴을 기대값으로 비교"
+    reasoning: "손절 → exit-rule의 stop_loss 확인이 최우선. 감정이 아닌 룰과 데이터로 판단"
+
+  # === Lesson 위반 시 자동 경고 ===
+  - intent: "RSI 75인 종목 사고 싶어 (Lesson: 고점 매수했다 → RSI 70 초과에서 사지 않기)"
+    input: "Analyst: RSI=75 / GraphRAG: lesson 'RSI 70 초과에서 사지 않기'"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "매수 판단" }
+      - recommend: |
+          ⚠️ Lesson 위반 경고:
+          과거 lesson "고점 매수했다 → 다음엔 RSI 70 초과에서 사지 않기"에 해당.
+          현재 RSI: 75 (lesson 임계값: 70 초과)
+
+          권고: RSI가 60 이하로 조정될 때까지 대기.
+          그래도 매수할 경우: 타진 매수(통상의 50% 이하)로 분할 진입
+    reasoning: "lesson과 모순되는 액션 → 자동 경고. 무시할지는 사용자 판단"
+
+  # === 손익통산 (택스 로스 하베스팅, 해외주식) ===
+  - intent: "평가손 종목, 세금 대책으로 쓸 수 있어?"
+    input: "Health Checker: 미국주식 A 평가손 -₩500,000 / 미국주식 B 평가익 +₩2,000,000"
+    steps:
+      - read: "portfolio.csv"
+      - code: |
+          종목 A 매도 → 실현손실 ₩500,000
+          종목 B 익절 시: 과세대상 = ₩2,000,000 - ₩500,000 - 기본공제 ₩2,500,000 → 0 (비과세)
+          손익통산 없이 B만 익절하면: 과세대상 = ₩2,000,000 - ₩2,500,000 → 0 (이 사례는 공제 범위 내)
+          절세액 = 과세대상 감소분 × 22% (공제 초과분이 있을 때만 의미 있음)
+          단: 국내 상장주식(소액주주)은 양도세 비과세이므로 손익통산 대상이 아님
+          단: 같은 해 안에 확정해야 통산 가능 (해외주식 양도세는 연 단위 합산)
+      - recommend: "손익통산 메리트를 수치로 제시. 공제 범위 내면 효과 없음을 명시. 재매수 타이밍에 주의"
+    reasoning: "택스 로스 하베스팅은 해외주식에만 해당. 수치로 메리트를 정량화"
+
+  # === 실적 발표 전후 매매 판단 ===
+  - intent: "실적 발표 전에 사야 해?"
+    input: "Analyst: 저평가도 70점 / Researcher: 실적 발표는 다음 주"
+    steps:
+      - recommend: |
+          실적 발표 전 매수 리스크:
+          - 실적 서프라이즈로 ±10-20% 변동 가능성
+          - 호실적이 선반영된 경우, 호실적에도 하락 리스크
+          - 한국 종목은 잠정실적 공시 후 외국인·기관 수급 변화가 크다
+
+          권고 패턴:
+          A: 실적 발표 후 매수 (리스크 회피)
+          B: 발표 전 절반, 발표 후 나머지 절반 (분할 진입)
+          C: 발표 전 전량 매수 (서프라이즈에 베팅)
+
+          판단 재료: 컨센서스와의 괴리, 과거 실적 서프라이즈 경향
+    reasoning: "실적 이벤트 리스크를 명시. 분할 진입을 제안"
+
+  # === 리밸런싱 (rebalance) ===
+  - intent: "리스크 줄이고 싶어"
+    input: "Health Checker의 진단 결과"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "리밸런싱 디펜시브" }
+      - read: "portfolio.csv"
+      - recommend: "디펜시브 성향의 리밸런싱안. 고Beta 종목 축소 → 저Beta 종목(105560.KS, 017670.KS 등 장기인컴) 추가"
+    reasoning: "리스크 억제 → defensive 전략. Beta의 Before/After를 제시"
+
+  - intent: "공격적으로 가고 싶어"
+    input: "Health Checker의 진단 결과"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "리밸런싱 어그레시브" }
+      - read: "portfolio.csv"
+      - recommend: "어그레시브한 리밸런싱안. 성장 비율을 끌어올림 (코스닥 성장주 비중 확대 시 소형주 제약도 함께 체크)"
+    reasoning: "공격 → aggressive 전략. 리스크 증가를 명시"
+
+  # === PF 개선 (adjust) ===
+  - intent: "PF 개선하고 싶어"
+    input: "Health Checker의 진단 결과"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "PF 개선" }
+      - read: "portfolio.csv"
+      - recommend: |
+          진단 결과로부터 문제점을 특정하고 우선순위를 붙여 개선안을 제시:
+          1. 고우선: 집중 리스크 (HHI > 임계값) → 분산화 제안
+          2. 중우선: 통화·지역 치우침 (KRW 편중이면 미국 자산, USD 60% 초과면 국내 자산 검토)
+          3. 저우선: 소형주 비율 → 대형주로 안정화
+    reasoning: "개선 → 문제를 우선순위로 정리. 한 번에 다 하지 않고 단계적으로"
+
+  - intent: "구체적으로 어떻게 하면 돼?"
+    input: "Health Checker: EXIT 판정 1종목, EARLY WARNING 2종목"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "PF 조정 구체적" }
+      - read: "portfolio.csv"
+      - recommend: |
+          EXIT 종목: 매도 → 대체 후보 3종목 제안 (다른 섹터/지역/통화)
+          WARNING 종목: 감시 지속 or 일부 매도 시뮬레이션
+          전체: Before/After의 PF 구성 비교표
+    reasoning: "구체적 → 추상론이 아닌 액션 플랜을 제시"
+
+  # === 정기 업무: 주간 과제 구조화 (KIK-724) ===
+  - intent: "주간 리뷰의 과제 특정"
+    input: "HC(PF+시황+괴리) + Risk Assessor의 판정 결과"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "주간 리뷰" }
+      - read: "portfolio.csv"
+      - read: "config/allocation.yaml"
+      - code: |
+          HC 결과 + Risk Assessor 결과 + allocation.yaml로부터 과제를 구조화:
+          1. exit-rule 도달 종목 → 대체 찾기 필요 (screener 기동 지시)
+          2. 타깃 괴리 red → 보충 필요 (screener 기동 지시 + 테마·지역 지정)
+          3. 밸류 트랩 의심 → 대체 찾기 (screener 기동 지시)
+          4. ETF 부족 (allocation.yaml 대조) → config/etf_universe.yaml에서 후보 제안
+          5. 과제 없음 → "현상 유지가 최선"
+      - recommend: "과제별 액션 플랜 + What-If 시뮬레이션"
+    reasoning: "주간 루틴의 Step 6. 과제 구조화 → screener 기동 조건을 출력"
+
+tool_responsibilities:
+  - yahoo_finance: 데이터 취득만 (현재가·펀더멘털)
+  - graphrag: 과거 데이터 취득만 (lesson·제약·보유 상태)
+  - portfolio.csv: 보유 종목 데이터 (직접 읽기)
+  - what-if 계산 (비율 변화·비용·세금)은 code interpreter로 실행

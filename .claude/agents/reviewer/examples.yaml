@@ -1,0 +1,215 @@
+# Reviewer Agent — Few-shot Examples
+# 리뷰 기준도 에이전트가 상황에 따라 자율적으로 판단한다.
+# guardrails의 5가지 제약은 참고이며, 그 외의 문제도 자율적으로 검출한다.
+# call_llm의 모델명은 config/llm_routing.yaml (reviewers.<role>.model)을 SSoT로 한다.
+
+examples:
+  # === 스크리닝 결과 리뷰 ===
+  - intent: "스크리닝 결과 리뷰"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "스크리닝 결과 리뷰" }
+    reviewers:
+      - role: "데이터 리뷰어"
+        checks:
+          - "결과가 0건이면 대체 조건을 제안"
+          - "밸류 트랩(저PER + 이익 감소)이 섞여 있지 않은가"
+          - "이상값(배당 > 15%, PBR < 0.1 등)이 남아 있지 않은가"
+          - "코스닥 소형주의 재무 데이터 누락을 0으로 취급하고 있지 않은가"
+      - role: "로직 리뷰어"
+        checks:
+          - "동일 섹터 편중이 되어 있지 않은가"
+          - "사용자의 투자 방침·과거 lesson과 맞는가"
+          - "기보유 종목과 중복되지 않는가 (보통주/우선주 중복 포함)"
+          - "preset의 스코어링 배분과 결과가 정합하는가 (growth preset에 저성장주가 랭크인하지 않았는가)"
+    conclude: "각 리뷰어의 결과를 통합하여 PASS/WARN/FAIL 판정"
+    reasoning: "스크리닝 → 데이터 품질과 로직 정합성을 병렬 체크"
+
+  # === 투자 판단 리뷰 (멀티 LLM — 반드시 Bash로 Python 실행) ===
+  - intent: "교체 제안 리뷰"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "교체 제안 리뷰" }
+      - bash: |
+          python3 -c "
+          import sys, yaml; sys.path.insert(0, '.')
+          from tools.llm import call_llm
+          model = yaml.safe_load(open('config/llm_routing.yaml'))['reviewers']['risk_reviewer']['model']
+          result = call_llm('gpt', model,
+              '<Strategist의 출력 전문을 여기에 넣는다>',
+              '투자 판단의 리스크 리뷰어. 리스크·누락·반론을 지적하라')
+          print('=== GPT Risk Review ===')
+          print(result)
+          "
+        verify: "stderr에 [llm] OK gpt/<model>이 출력될 것"
+      - bash: |
+          python3 -c "
+          import sys, yaml; sys.path.insert(0, '.')
+          from tools.llm import call_llm
+          model = yaml.safe_load(open('config/llm_routing.yaml'))['reviewers']['logic_reviewer']['model']
+          result = call_llm('gemini', model,
+              '<Strategist의 출력 전문을 여기에 넣는다>',
+              '투자 판단의 로직 리뷰어. 모순·논리 정합성·lesson과의 정합을 확인하라')
+          print('=== Gemini Logic Review ===')
+          print(result)
+          "
+        verify: "stderr에 [llm] OK gemini/<model>이 출력될 것"
+      - code: "Claude(자신)로 데이터 정확성을 리뷰 (call_llm 불필요)"
+    reviewers:
+      - role: "로직 리뷰어"
+        checks:
+          - "매도 시그널(bearish)인데 보유 권고 등의 모순이 없는가"
+          - "과거 lesson과 모순되는 제안을 하고 있지 않은가"
+          - "과거 테제와 이번 판단이 정합하는가"
+          - "이전에 같은 종목에서 실패하지 않았는가"
+      - role: "리스크 리뷰어"
+        checks:
+          - "매도 제안에 자금 용도가 포함되어 있는가"
+          - "'아무것도 하지 않음' 선택지와 비교되었는가"
+          - "통화 배분 제약(USD 60% 이하, KRW 최저선 등)을 충족하는가"
+          - "테마 추격 매수 리스크 (F&G 80 초과에서 트렌드 테마 추가)"
+          - "누락된 리스크 (실적 발표 시점, 지정학, 환율(USD/KRW) 급변 등)"
+      - role: "데이터 리뷰어"
+        checks:
+          - "세금·거래비용 (국내 증권거래세 0.15%, 미국주식 양도세 22%)이 계산에 포함되었는가"
+          - "what-if의 자금 수지 정합성"
+          - "매매 수량 확인 (1주 단위, 주수는 정수) 및 환율 환산 기준"
+          - "추정값이 아닌 계산값이 사용되었는가"
+    conclude: "각 리뷰어의 결과를 통합하여 PASS/WARN/FAIL 판정"
+    reasoning: "투자 판단 → 3관점으로 병렬 리뷰. lesson과의 정합성이 가장 중요"
+
+  # === WARN 구체 예 ===
+  - intent: "실적 발표 직전 교체 제안 리뷰 → WARN"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "교체 리뷰 실적 발표" }
+    reviewers:
+      - role: "리스크 리뷰어"
+        result: |
+          WARN: 매수 후보의 실적 발표가 3영업일 후 예정.
+          실적 서프라이즈 리스크가 높은 기간.
+          권고: 발표 후까지 대기, 또는 타진 매수(50% 이하)로 분할 진입
+    conclude: "WARN — 실적 발표 타이밍 리스크. 실행은 가능하나 리스크 주석을 부여"
+    reasoning: "치명적이지는 않지만 리스크 있음 → WARN 판정. 수정 지시가 아닌 주의 환기"
+
+  # === FAIL 구체 예 + 수정 지시 ===
+  - intent: "매도 제안 리뷰 → FAIL (자금 용도 누락)"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "매도 리뷰" }
+    reviewers:
+      - role: "리스크 리뷰어"
+        result: |
+          FAIL: 매도 제안에 자금 용도가 포함되어 있지 않다.
+          "팔고 끝"은 PF의 현금 비율을 불필요하게 높인다.
+          수정 지시: 다음 중 하나를 추가할 것
+          1. 대체 종목으로의 교체 제안
+          2. 현금 비율의 타당성 설명 (리세션 대비 등)
+          3. 단계적 매도 스케줄
+    conclude: "FAIL — Strategist에 반려. 자금 용도를 추가한 뒤 재제출"
+    reasoning: "guardrails 3번: 매도 제안 → 자금 용도 필수. 수정 지시를 구체적으로"
+
+  # === 관점 불일치 (복수 리뷰어) ===
+  - intent: "리뷰어 간 판단이 갈린 경우"
+    reviewers:
+      - role: "리스크 리뷰어"
+        result: "WARN: 소형주 비율이 28%로 상승 (임계값 25%)"
+      - role: "로직 리뷰어"
+        result: "PASS: lesson 위반 없음, 테제 정합"
+      - role: "데이터 리뷰어"
+        result: "PASS: 수치 정합성 OK"
+    conclude: |
+      통합 판단: WARN
+      이유: 리스크 리뷰어가 소형주 비율 초과를 지적.
+      나머지 2명은 PASS → 치명적이지는 않지만 주의 환기를 부여.
+      가장 엄격한 판정(FAIL > WARN > PASS)을 채택하는 원칙에 따름.
+    reasoning: "리뷰어 간 의견이 갈림 → 가장 엄격한 판정을 채택"
+
+  # === F&G 과열 경고 ===
+  - intent: "F&G 80 초과에서 트렌드 테마 종목 매수 리뷰"
+    reviewers:
+      - role: "리스크 리뷰어"
+        result: |
+          WARN: F&G Index = 82 (탐욕)에서 트렌드 테마 종목을 매수.
+          테마 버블 붕괴 리스크 있음.
+          과거 패턴: F&G 80 초과의 테마 추격 매수는 평균 3개월 이내 -15% 조정
+          권고: 타진 매수(통상의 30% 이하)로 관망
+    conclude: "WARN — 과열 시장에서의 트렌드 추종. 포지션 사이즈를 제한"
+    reasoning: "F&G 80 초과 + 트렌드 테마 → 테마 추격 매수 리스크 경고"
+
+  # === 매수 판단 리뷰 ===
+  - intent: "매수 판단 리뷰"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "매수 판단 리뷰" }
+    reviewers:
+      - role: "로직 리뷰어"
+        checks:
+          - "분석 시그널과 추천이 일치하는가"
+          - "lesson의 trigger에 해당하는 상황이 아닌가"
+      - role: "리스크 리뷰어"
+        checks:
+          - "PF 가중평균 RSI가 70 초과인데 추가 매수를 제안하고 있지 않은가"
+          - "섹터/통화 집중이 악화되지 않는가"
+          - "규모 밸런스(소형주 25% 초과)는 유지되는가"
+      - role: "데이터 리뷰어"
+        checks:
+          - "매수비용 계산이 맞는가 (USD 종목은 환율 환산 포함)"
+          - "Before/After의 비율 변화가 정확한가"
+    conclude: "각 리뷰어의 결과를 통합하여 PASS/WARN/FAIL 판정"
+    reasoning: "매수 → 과열 체크와 집중 리스크가 중요"
+
+  # === PF 진단 리뷰 ===
+  - intent: "PF 진단 리뷰"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "PF 진단 리뷰" }
+    reviewers:
+      - role: "리스크 리뷰어"
+        checks:
+          - "통화/섹터/지역 집중 리스크가 올바르게 검출되었는가"
+          - "평가익이 1종목에 PF 총이익의 50% 이상 집중되어 있지 않은가"
+          - "소형주 비율이 25% 초과일 때 경고되었는가"
+      - role: "로직 리뷰어"
+        checks:
+          - "이전에 같은 종목에서 실패하지 않았는가"
+          - "개선안이 lesson과 모순되지 않는가"
+    conclude: "각 리뷰어의 결과를 통합하여 PASS/WARN/FAIL 판정"
+    reasoning: "PF 진단 → 리스크 누락과 lesson 정합이 중심"
+
+  # === 반론 체크 (Devil's Advocate) ===
+  - intent: "반론 체크"
+    reviewers:
+      - role: "리스크 리뷰어"
+        checks:
+          - "제안의 반대 입장에서 논점을 제시"
+          - "최악의 시나리오에서 무엇이 일어나는가"
+          - "'정말 그런가?'의 검증"
+          - "누락된 대안은 없는가"
+    conclude: "반론이 치명적인지 판단하여 PASS/WARN/FAIL 판정"
+    reasoning: "Devil's Advocate → 리스크 리뷰어 단독으로 실행"
+
+  # === 폴백 (전 LLM이 Claude) ===
+  - intent: "투자 판단 리뷰 (API 키 미설정)"
+    steps:
+      - check: "llm.get_available_providers() == []"
+      - tool: graphrag.get_context
+        params: { user_input: "리뷰" }
+    reviewers:
+      - role: "리스크 리뷰어 (Claude 대체)"
+      - role: "로직 리뷰어 (Claude 대체)"
+      - role: "데이터 리뷰어 (Claude 대체)"
+    conclude: "전부 Claude로 3관점을 순서대로 리뷰하고 통합 판단"
+    reasoning: "API 키 미설정 → Claude Code 자체로 전 리뷰어를 실행"
+
+# 통합 판정의 원칙
+judgment_principles:
+  - 가장 엄격한 판정을 채택 (FAIL > WARN > PASS)
+  - FAIL: 수정 지시를 구체적으로 제시하고 해당 에이전트에 반려
+  - WARN: 리스크 주석을 부여하여 출력. 실행은 사용자 판단
+  - PASS: 그대로 출력
+
+tool_responsibilities:
+  - llm: LLM 호출만 (텍스트 생성). 판단 로직 없음
+  - graphrag: 과거 데이터 취득만 (lesson·테제·실패 이력·이전 리뷰)
+  - 리뷰 판정(PASS/WARN/FAIL)은 에이전트가 통합 판단한다

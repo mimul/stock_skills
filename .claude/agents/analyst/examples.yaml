@@ -1,0 +1,184 @@
+# Analyst Agent — Few-shot Examples
+# 수치는 샘플이다. 에이전트가 자율적으로 판단한다.
+
+examples:
+  # === 개별주 분석 ===
+  - intent: "삼성전자 어때?"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "삼성전자 어때?" }
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "005930.KS" }
+      - tool: yahoo_finance.get_price_history
+        params: { symbol: "005930.KS", period: "1y" }
+      - code: "RSI(14), SMA50, SMA200 을 계산"
+      - judge: "밸류에이션 + 테크니컬 + 과거 분석과 비교해 종합 판정"
+    reasoning: "기업명→티커 변환(삼성전자=005930.KS). 컨텍스트→데이터 취득→테크니컬 계산→종합 판정"
+
+  - intent: "AAPL 저평가도는?"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "AAPL 저평가도" }
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "AAPL" }
+      - judge: "PER/PBR/배당수익률/ROE 로 저평가도 스코어를 계산. 달러 기준이므로 원화 환산 병기"
+    reasoning: "티커 직접 지정. 저평가도에 초점을 맞춘 분석"
+
+  - intent: "SK하이닉스 환원율은?"
+    steps:
+      - tool: yahoo_finance.get_stock_detail
+        params: { symbol: "000660.KS" }
+      - judge: "배당 + 자사주 매입(소각) = 총환원율을 계산"
+    reasoning: "주주환원에 초점. get_stock_detail 로 상세 재무 데이터가 필요"
+
+  # === 우선주 ===
+  - intent: "삼성전자우 어때?"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "삼성전자우" }
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "005935.KS" }
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "005930.KS" }
+      - judge: "보통주 대비 괴리율 + 배당수익률 우위 + 의결권 없음을 감안해 배당 중심으로 평가"
+    reasoning: "우선주는 보통주(005930.KS)와 함께 취득해 괴리율을 비교. 인컴 목적이면 우선주가 유리할 수 있음"
+
+  # === 코스닥 소형주 (재무 누락 대응) ===
+  - intent: "알테오젠 어때?"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "알테오젠" }
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "196170.KQ" }
+      - tool: yahoo_finance.get_stock_detail
+        params: { symbol: "196170.KQ" }
+      - tool: yahoo_finance.get_price_history
+        params: { symbol: "196170.KQ", period: "1y" }
+      - code: "RSI(14), SMA50, SMA200 을 계산. ROE·성장률이 None 이면 '데이터 없음'으로 표기"
+      - judge: "코스닥 바이오는 PER 적용이 어려움 → 파이프라인·현금 소진 속도·테크니컬 중심으로 판정"
+    reasoning: "기업명→코스닥 티커(.KQ) 추론. 재무 필드 누락 가능성을 전제로 get_stock_detail 로 보완"
+
+  # === ETF 분석 ===
+  - intent: "TIGER 미국S&P500 어때?"
+    steps:
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "360750.KS" }
+      - judge: "ETF 자동 검출 → 보수율·AUM·펀드 규모로 평가. 국내 상장 해외 ETF 는 환노출 여부도 언급"
+    reasoning: "quoteType=ETF 를 검출하면 ETF 전용 평가로 전환. yfinance 에 보수율이 비어 있으면 그 사실을 명시"
+
+  - intent: "SPY 보수율은?"
+    steps:
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "SPY" }
+      - judge: "보수율을 취득하고 수준을 평가 (<0.1% 우수 / <0.3% 양호 / <0.5% 보통)"
+    reasoning: "ETF 보수율에 특화된 질문"
+
+  - intent: "KODEX 반도체 어때?"
+    steps:
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "091160.KS" }
+      - judge: "섹터 ETF → 보수율 + AUM + 상위 편입 종목 + 섹터 동향"
+    reasoning: "섹터 ETF 는 섹터 전체의 대체재. 편입 종목 집중도(삼성전자·SK하이닉스 비중)도 평가"
+
+  - intent: "AGG 는 어때?"
+    steps:
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "AGG" }
+      - judge: "채권 ETF → 보수율 + 분배율 + 듀레이션 + 금리 민감도"
+    reasoning: "채권 ETF 는 PER/PBR 비적용. 분배율과 듀레이션으로 평가. 국내 대안은 KODEX 국고채3년(114260.KS)"
+
+  # === 밸류트랩 수치 예 ===
+  - intent: "밸류트랩 아니야?"
+    steps:
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "<직전 종목>" }
+      - tool: yahoo_finance.get_stock_detail
+        params: { symbol: "<직전 종목>" }
+      - judge: |
+          밸류트랩 판정:
+          PER < 8 이고 EPS 성장률 < -5% → 밸류트랩 의심
+          PER < 8 이고 EPS 성장률 > 0% → 진짜 저평가
+          저PBR + ROE 하락 추세 → 자산의 질 저하 리스크
+          만성 저PBR 지주사·규제 산업은 밸류업 공시(자사주 소각·배당 확대) 여부를 추가 확인
+    reasoning: "수치 기준을 명시. EPS 성장률 추이가 판정의 열쇠. 한국은 PER 수준이 낮아 기준을 8 로 둔다"
+
+  # === 역발상 시그널 수치 예 ===
+  - intent: "역발상으로 들어갈 만해?"
+    steps:
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "<직전 종목>" }
+      - tool: yahoo_finance.get_price_history
+        params: { symbol: "<직전 종목>", period: "6mo" }
+      - code: "RSI(14), BB(20,2), 거래량 비율을 계산"
+      - judge: |
+          역발상 시그널 판정:
+          RSI < 30 + BB 하단 이탈 + 펀더멘털 견조(ROE>5%) → 매수 시그널
+          RSI < 20 + 거래량 급증 → 셀링 클라이맥스 가능성
+          RSI < 30 이어도 EPS 성장률이 마이너스 → 역발상 비추천
+          외국인 순매도가 지속 중이면 반등 지연 가능성을 주석
+    reasoning: "테크니컬 + 펀더멘털 복합 판정. RSI 단독으로 판단하지 않는다"
+
+  # === 컨텍스트 신선도 분기 ===
+  - intent: "전에 조사한 종목 최신은? (FRESH)"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "전에 조사한 종목" }
+      - judge: "신선도=FRESH (24h 이내) → 컨텍스트만으로 답변. API 재취득하지 않음"
+    reasoning: "FRESH → 전회 데이터로 충분. API 절약"
+
+  - intent: "전에 조사한 종목 최신은? (RECENT)"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "전에 조사한 종목" }
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "<컨텍스트에서 특정>" }
+      - judge: "신선도=RECENT (7일 이내) → 차분만 갱신. 전회 대비 변화를 보여준다"
+    reasoning: "RECENT → 차분 모드. 전회 값과의 비교에 초점"
+
+  - intent: "005930.KS 조사해줘 (STALE/NONE)"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "005930.KS" }
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "005930.KS" }
+      - tool: yahoo_finance.get_stock_detail
+        params: { symbol: "005930.KS" }
+      - tool: yahoo_finance.get_price_history
+        params: { symbol: "005930.KS", period: "1y" }
+      - code: "RSI, SMA, 저평가도 스코어, 환원율을 모두 계산"
+      - judge: "풀 분석. 전 섹션을 출력"
+    reasoning: "STALE/NONE → 풀 취득. 전 항목을 새로 계산"
+
+  # === 보유 vs 미보유 ===
+  - intent: "005930.KS 분석 (보유 중)"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "005930.KS" }
+      - judge: "보유 종목 → 매입 단가 대비 평가손익(원화)·테제와의 정합성을 추가 표시"
+    reasoning: "컨텍스트에 BOUGHT 있음 → 보유자 관점의 코멘트를 추가"
+
+  - intent: "MSFT 분석 (미보유·관심 중)"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "MSFT" }
+      - judge: "관심 종목 → 매수 타이밍 판단 재료를 중심으로. 전회 리포트와의 차분. 환율(USD/KRW) 영향도 한 줄"
+    reasoning: "컨텍스트에 BOOKMARKED 있음 → 매수 검토자 관점"
+
+  # === 테제 생성 (KIK-715) ===
+  - intent: "005930.KS 분석해줘"
+    thesis_generation: |
+      분석 완료 후 thesis 가 미등록인 경우:
+      1. 분석 결과로부터 "왜 보유하는가"를 1~2문장으로 생성
+      2. key_kpis (감시 KPI) 를 3~5개 추출
+      3. sell_triggers (매도 조건) 를 2~3개 설정
+      4. save_note(note_type="thesis") 로 저장을 제안
+    example_output: |
+      📝 테제를 기록할까요?
+      "삼성전자는 메모리 업황 회복 + HBM/파운드리 경쟁력 회복에 따른 이익 성장이 기대된다"
+      감시 KPI: 영업이익률>15%, 매출성장>5%, HBM 점유율, 분기배당 유지
+      매도 조건: 2분기 연속 감익, 배당 삭감, 영업이익률 10% 이하
+
+tool_responsibilities:
+  - yahoo_finance: 데이터 취득만 (주가·재무·가격 이력)
+  - graphrag: 과거 데이터 취득·저장만 (판단 로직 없음)
+  - 테크니컬 계산(RSI/SMA 등)은 에이전트가 code interpreter 로 실행
