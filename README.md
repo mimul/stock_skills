@@ -35,6 +35,11 @@ export OPENAI_API_KEY=sk-proj-...
 export NEO4J_URI=bolt://localhost:7688
 export NEO4J_MODE=full  # off/summary/full
 export NEO4J_DEBUG=1    # 접속 실패 시 진단을 최초 1회만 stderr 에 출력（기본: 무음）
+
+# KRX 정보데이터시스템（한국 종목 PER/PBR 전종목 스냅샷, 선택）
+# data.krx.co.kr 무료 계정. pip install pykrx 도 필요. 미설정이면 yfinance 분기 재무제표로 TTM PER/PBR 을 계산한다
+export KRX_ID=...
+export KRX_PW=...
 ```
 
 모두 선택 사항. 설정하지 않아도 기본값으로 동작한다.

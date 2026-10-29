@@ -11,6 +11,7 @@
 - Neo4j 접속 실패는 기본적으로 무음. 진단이 필요하면 `NEO4J_DEBUG=1`（또는 `true`/`yes`）로 최초 1회만 stderr 에 짧은 줄이 출력된다（KIK-749）
 - TEI 벡터 검색은 `TEI_URL` 환경 변수로 제어（기본: `http://localhost:8081`）. 미기동 시 벡터 검색 스킵
 - Linear 연동은 `LINEAR_ENABLED=on` 으로 활성화（기본: off）
+- 한국 종목 PER/PBR 보강(`src/data/kr_valuation/`)은 `KRX_ID` / `KRX_PW` 환경 변수 + `pip install pykrx` 가 있으면 KRX 스냅샷(pykrx)을, 없으면 yfinance 분기 재무제표 기반 TTM 계산을 쓴다（둘 다 미설정이어도 동작한다）
 
 ## 시장·통화 전제
 
@@ -36,6 +37,7 @@
 
 ### 데이터 층 (src/data/)
 - 데이터 취득은 반드시 `src/data/yahoo_client/` 경유（yfinance 를 직접 호출하지 않는다）
+- Yahoo 는 한국 종목(.KS/.KQ)의 PER/PBR/EPS/BPS 를 주지 않는다. `get_stock_info` 가 `src/data/kr_valuation.enrich_stock_info()` 로 채우며, 공급자 추가 시 `kr_valuation/_*_provider.py` 에 `NAME` / `is_available()` / `get(symbol)` 을 갖춘 모듈을 두고 `PROVIDERS` 우선순위에 넣는다
 - yahoo_client 는 모듈 함수（클래스가 아니다）
 - 배당수익률 정규화: `_normalize_ratio()` 가 값 > 1 인 경우 100 으로 나누어 비율로 변환
 - 데이터 모델 정의: `docs/data-models.md` 참조

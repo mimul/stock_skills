@@ -148,6 +148,17 @@ def is_korean_stock(symbol: str) -> bool:
     return _suffix_of(symbol) is not None
 
 
+def is_preferred_kr(symbol: str) -> bool:
+    """한국 우선주 여부. KRX 종목코드는 보통주가 0 으로 끝나고 우선주는 5/7/9 등으로 끝난다.
+
+    예: 005930.KS(삼성전자 보통주) → False, 005935.KS(삼성전자우) → True
+    """
+    if not is_korean_stock(symbol):
+        return False
+    code = symbol.split(".")[0]
+    return len(code) == 6 and code.isdigit() and code[-1] != "0"
+
+
 def get_lot_size(symbol: str) -> int:
     """심볼의 최소 매매 단위를 반환한다.
 

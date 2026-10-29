@@ -87,7 +87,8 @@ Tools (tools/)
   scoring.py       — 3축 품질 스코어링（src/data/scoring.py 의 파사드）
 
 Data (src/data/)
-  yahoo_client/  — yfinance 래퍼（24h JSON 캐시）
+  yahoo_client/  — yfinance 래퍼（24h JSON 캐시）. kr_fundamentals.py 는 분기 재무제표 기반 TTM PER/PBR 계산
+  kr_valuation/  — 한국 종목 PER/PBR/EPS/BPS 보강（공급자: pykrx → yfinance-ttm）
   grok_client/   — Grok API (xAI) 래퍼
   graph_store/   — Neo4j 쓰기（dual-write）
   graph_query/   — Neo4j 읽기

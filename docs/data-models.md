@@ -4,7 +4,7 @@
 
 ---
 
-## stock_info dict（27 필드）
+## stock_info dict（27 필드 + 한국 종목 보강 4 필드）
 
 `yahoo_client.get_stock_info(symbol)` 이 반환하는 기본 데이터. JSON 캐시 대상.
 
@@ -39,6 +39,26 @@
 | `quoteType` | `str \| None` | 종별 ("EQUITY" / "ETF" 등) | `quoteType` | — |
 
 **합계: 27 키**（`quoteType` 은 KIK-469 에서 추가）
+
+### 한국 종목 보강 필드（`.KS` / `.KQ` 에만 추가, 4 필드）
+
+Yahoo Finance 는 한국 종목의 `trailingPE` / `priceToBook` / `trailingEps` / `bookValue` 를 제공하지 않는다(2026-10 실측, 코스피·코스닥 전 종목). `get_stock_info` 는 한국 종목이면 `src/data/kr_valuation` 으로 `per` / `pbr` 의 빈 값을 채우고 아래 키를 추가한다. 미국 종목에는 이 키가 없다.
+
+| 키 | 타입 | 설명 | 출처 |
+|:---|:---|:---|:---|
+| `eps` | `float \| None` | 주당순이익（원） | 공급자 |
+| `bps` | `float \| None` | 주당순자산（원） | 공급자 |
+| `valuation_source` | `str \| None` | `"pykrx"` / `"yfinance-ttm"` / `"yahoo"`(Yahoo 값이 이미 있던 경우) / `None`(보강 실패) | — |
+| `valuation_as_of` | `str \| None` | 기준일（pykrx: 거래일, yfinance-ttm: 최근 분기 말） | 공급자 |
+
+공급자 우선순위:
+
+1. **pykrx** — KRX 정보데이터시스템 전종목 일별 스냅샷. `KRX_ID` / `KRX_PW` 환경 변수와 `pip install pykrx` 가 필요. 스냅샷은 `data/cache/kr_valuation_pykrx_YYYYMMDD.json`
+2. **yfinance-ttm** — 분기 손익계산서·재무상태표·발행주식수로 직접 계산. 자격 증명 불필요. EPS 는 `Basic EPS` 4분기 합을 우선하고 없으면 순이익 4분기 합 / 발행주식수. 4분기가 약 9개월 간격으로 연속할 때만 계산한다(Q4 누락 시 `eps`/`per` 는 `None`). EPS ≤ 0 이면 `per` 는 `None`. 우선주(종목코드 끝자리 ≠ 0)와 재무제표 통화가 시세 통화와 다른 종목은 계산하지 않는다. 종목별 `data/cache/{symbol}_valuation.json`(24h)
+
+ETF·펀드(`quoteType` 이 ETF/MUTUALFUND)는 보강을 건너뛴다. pykrx 조회가 예외로 끝나면 그 세션 동안 pykrx 공급자를 비활성화하고 yfinance-ttm 으로 넘어간다. 공급자 공통 키는 `per` / `pbr` / `eps` / `bps` / `source` / `as_of` 이며 나머지 키(pykrx 의 `dividend_yield`/`dps`/`market`, yfinance-ttm 의 `price`/`shares_outstanding`)는 공급자별로 다르다.
+
+보강 뒤에도 `_sanitize_anomalies` 가 적용된다(PBR < 0.05, 0 < PER < 1 은 `None`).
 
 ### 정규화 규칙 (`_normalize_ratio`)
 

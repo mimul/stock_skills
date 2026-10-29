@@ -23,6 +23,7 @@ from src.data.yahoo_client import (  # noqa: E402
     get_sector_rs,
     SECTOR_ETFS,
 )
+from src.data.kr_valuation import get_valuation as get_kr_valuation  # noqa: E402
 
 __all__ = [
     "get_stock_info",
@@ -34,4 +35,5 @@ __all__ = [
     "screen_stocks",
     "get_sector_rs",
     "SECTOR_ETFS",
+    "get_kr_valuation",
 ]

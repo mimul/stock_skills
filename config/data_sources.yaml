@@ -38,5 +38,6 @@ domains:
       - tool: yahoo_finance.get_stock_info
       - tool: yahoo_finance.get_price_history
     recommended:
+      - tool: yahoo_finance.get_kr_valuation  # 한국 종목 PER/PBR/EPS/BPS (Yahoo 미제공분 보강)
       - tool: grok.search_stock_deep
       - path: data/notes/  # thesis / observation
